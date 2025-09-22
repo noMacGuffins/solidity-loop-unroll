@@ -11,10 +11,6 @@ parameters:
     type: string
     # solbuildpackpusher/solidity-buildpack-deps:ubuntu2004-26
     default: "solbuildpackpusher/solidity-buildpack-deps@sha256:1f387a77be889f65a2a25986a5c5eccc88cec23fabe6aeaf351790751145c81e"
-  ubuntu-2204-docker-image:
-    type: string
-    # solbuildpackpusher/solidity-buildpack-deps:ubuntu2204-2
-    default: "solbuildpackpusher/solidity-buildpack-deps@sha256:877fcc2589779f8245770711d10db92eda97d338dae76b6a9f27dde1a41b3aa0"
   ubuntu-2404-docker-image:
     type: string
     # solbuildpackpusher/solidity-buildpack-deps:ubuntu2404-3
@@ -573,42 +569,6 @@ defaults:
         MAKEFLAGS: -j 10
         CPUs: 10
 
-  - base_ubuntu2204: &base_ubuntu2204
-      docker:
-        - image: << pipeline.parameters.ubuntu-2204-docker-image >>
-      environment: &base_ubuntu2204_env
-        TERM: xterm
-        CC: gcc
-        CXX: g++
-        MAKEFLAGS: -j 3
-        CPUs: 3
-
-  - base_ubuntu2204_large: &base_ubuntu2204_large
-      <<: *base_ubuntu2204
-      resource_class: large
-      environment: &base_ubuntu2204_large_env
-        <<: *base_ubuntu2204_env
-        MAKEFLAGS: -j 5
-        CPUs: 5
-
-  - base_ubuntu2204_clang: &base_ubuntu2204_clang
-      docker:
-        - image: << pipeline.parameters.ubuntu-2204-docker-image >>
-      environment: &base_ubuntu2204_clang_env
-        TERM: xterm
-        CC: clang
-        CXX: clang++
-        MAKEFLAGS: -j 3
-        CPUs: 3
-
-  - base_ubuntu2204_clang_large: &base_ubuntu2204_clang_large
-      <<: *base_ubuntu2204_clang
-      resource_class: large
-      environment: &base_ubuntu2204_clang_large_env
-        <<: *base_ubuntu2204_clang_env
-        MAKEFLAGS: -j 5
-        CPUs: 5
-
   - base_ubuntu2404: &base_ubuntu2404
       docker:
         - image: << pipeline.parameters.ubuntu-2404-docker-image >>
@@ -1148,8 +1108,6 @@ jobs:
       EVM: << pipeline.parameters.evm-version >>
       EOF_VERSION: 0
       OPTIMIZE: 0
-      # Skip semantic tests due to evmone compatibility issues with Ubuntu 22.04
-      SOLTEST_FLAGS: --no-semantic-tests --no-smt
     steps:
       - soltest
 
