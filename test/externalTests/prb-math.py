@@ -51,7 +51,7 @@ class PRBMathRunner(FoundryRunner):
 test_config = TestConfig(
     name="PRBMath",
     repo_url="https://github.com/PaulRBerg/prb-math.git",
-    ref="<latest-release>",
+    ref="main",
     settings_presets=[
         SettingsPreset.LEGACY_NO_OPTIMIZE,
         SettingsPreset.LEGACY_OPTIMIZE_EVM_ONLY,
