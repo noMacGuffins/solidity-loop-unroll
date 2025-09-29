@@ -132,7 +132,7 @@ Json SSACFGJsonExporter::exportBlock(SSACFG const& _cfg, SSACFG::BlockId _entryI
 
 Json SSACFGJsonExporter::toJson(SSACFG const& _cfg, SSACFG::BlockId _blockId, LivenessAnalysis const* _liveness)
 {
-	auto const valueToString = [&](SSACFG::ValueId const& valueId) { return varToString(_cfg, valueId); };
+	auto const valueToString = [&](LivenessAnalysis::LivenessData::LiveCounts::value_type const& _live) { return varToString(_cfg, _live.first); };
 
 	Json blockJson = Json::object();
 	auto const& block = _cfg.block(_blockId);
