@@ -10,8 +10,10 @@ else
     BUILD_TYPE="$1"
 fi
 
-if [[ $(git tag --points-at HEAD 2> /dev/null) == v* ]]; then
-    touch "${ROOTDIR}/prerelease.txt"
+# Intentionally not using prerelease_suffix.sh here. We do not want lingering prerelease.txt in
+# dev builds, accidentally overriding version when someone runs the build manually.
+if [[ $(git tag --points-at HEAD 2> /dev/null) =~ ^v[0-9.]+$ ]]; then
+    echo -n > prerelease.txt
 fi
 
 mkdir -p "$BUILDDIR"

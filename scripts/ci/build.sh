@@ -9,14 +9,7 @@ prerelease_source="${1:-ci}"
 
 cd "${ROOTDIR}"
 
-if [[ -n $CIRCLE_TAG || -n $FORCE_RELEASE ]]; then
-    echo -n > prerelease.txt
-else
-    # Use last commit date rather than build date to avoid ending up with builds for
-    # different platforms having different version strings (and therefore producing different bytecode)
-    # if the CI is triggered just before midnight.
-    TZ=UTC git show --quiet --date="format-local:%Y.%-m.%-d" --format="${prerelease_source}.%cd" > prerelease.txt
-fi
+"${ROOTDIR}/scripts/prerelease_suffix.sh" "$prerelease_source" "$CIRCLE_TAG" > prerelease.txt
 
 mkdir -p build
 cd build

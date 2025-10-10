@@ -187,11 +187,7 @@ commands:
       - run:
           name: Store prerelease suffix
           command: |
-            if [[ -n $CIRCLE_TAG ]]; then
-              echo -n > prerelease.txt;
-            else
-              date -u +"nightly.%Y.%-m.%-d" > prerelease.txt;
-            fi
+            "scripts/prerelease_suffix.sh" nightly "$CIRCLE_TAG" > prerelease.txt
 
   install_and_check_minimum_requirements:
     parameters:
