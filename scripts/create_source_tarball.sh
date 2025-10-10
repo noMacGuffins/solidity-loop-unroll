@@ -13,6 +13,8 @@ commit_date=$(git show --format=%ci HEAD | head -n 1 | cut - -b1-10 | sed -e 's/
 # File exists and has zero size -> not a prerelease
 if [[ -e prerelease.txt && ! -s prerelease.txt ]]; then
     version_string="$version"
+elif [[ -e prerelease.txt ]]; then
+    version_string="${version}-$(cat prerelease.txt)-${commit_hash}"
 else
     version_string="${version}-nightly-${commit_date}-${commit_hash}"
 fi
