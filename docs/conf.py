@@ -126,7 +126,7 @@ project_copyright = '2016-2025, The Solidity Authors'
 with open('../CMakeLists.txt', 'r', encoding='utf8') as f:
     version = re.search('PROJECT_VERSION "([^"]+)"', f.read()).group(1)
 # The full version, including alpha/beta/rc tags.
-if not os.path.isfile('../prerelease.txt') or os.path.getsize('../prerelease.txt') == 0:
+if os.path.isfile('../prerelease.txt') and os.path.getsize('../prerelease.txt') == 0:
     release = version
 else:
     # This is a prerelease version
