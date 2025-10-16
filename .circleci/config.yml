@@ -1842,6 +1842,17 @@ jobs:
       - matrix_notify_failure_unless_pr
       - matrix_notify_release_unless_pr
 
+  c_source_tarball:
+    <<: *base_ubuntu2404_small
+    steps:
+      - checkout
+      - setup_prerelease
+      - run: scripts/create_source_tarball.sh
+      - store_artifacts:
+          path: upload/
+      - matrix_notify_failure_unless_pr
+      - matrix_notify_release_unless_pr
+
   b_alpine_docker:
     <<: *base_cimg_small
     steps:
@@ -2017,6 +2028,7 @@ workflows:
             - b_osx
             - b_win
             - b_ems
+      - c_source_tarball: *requires_nothing
 
   nightly:
 
