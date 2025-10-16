@@ -2,17 +2,35 @@
 set -euo pipefail
 
 REPO_ROOT="$(dirname "$0")"/..
+# shellcheck source=scripts/common.sh
+source "${REPO_ROOT}/scripts/common.sh"
+
 cd "$REPO_ROOT"
 version=$(scripts/get_version.sh)
 commit_hash=$(git rev-parse --short=8 HEAD)
-commit_date=$(git show --format=%ci HEAD | head -n 1 | cut - -b1-10 | sed -e 's/-0?/./' | sed -e 's/-0?/./')
 
-# File exists and has zero size -> not a prerelease
-if [[ -e prerelease.txt && ! -s prerelease.txt ]]; then
-    version_string="$version"
+if [[ -e prerelease.txt ]]; then
+    prerelease_suffix=$(cat prerelease.txt)
+    if [[ $prerelease_suffix == "" ]]; then
+        # File exists and has zero size -> not a prerelease
+        version_string="$version"
+    elif [[ $prerelease_suffix == pre.* ]]; then
+        # Tagged prerelease -> unambiguous, so commit hash not needed
+        version_string="${version}-${prerelease_suffix}"
+    else
+        # Nightly/develop/other prerelease -> include commit hash
+        version_string="${version}-${prerelease_suffix}-${commit_hash}"
+    fi
 else
+    # Nightly/develop/other prerelease -> include commit hash + default prerelease suffix
+    commit_date=$(TZ=UTC git show --quiet --date="format-local:%Y.%-m.%-d" --format="%cd")
     version_string="${version}-nightly-${commit_date}-${commit_hash}"
 fi
+
+# The only purpose of commit_hash.txt is to make it possible to build the compiler without git.
+# It is not meant as an override of the real hash.
+[[ ! -e commit_hash.txt ]] || \
+    fail "commit_hash.txt is present in the repository root, but will not be used to override the commit hash for the source package."
 
 TEMPDIR=$(mktemp -d -t "solc-src-tarball-XXXXXX")
 SOLDIR="${TEMPDIR}/solidity_${version_string}/"

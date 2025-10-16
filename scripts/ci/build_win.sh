@@ -8,20 +8,7 @@ FORCE_RELEASE="${FORCE_RELEASE:-}"
 CIRCLE_TAG="${CIRCLE_TAG:-}"
 
 cd "$ROOTDIR"
-if [[ $FORCE_RELEASE != "" || $CIRCLE_TAG != "" ]]; then
-    echo -n > prerelease.txt
-else
-    # Use last commit date rather than build date to avoid ending up with builds for
-    # different platforms having different version strings (and therefore producing different bytecode)
-    # if the CI is triggered just before midnight.
-    # NOTE: The -local suffix makes git not use the timezone from the commit but instead convert to
-    # local one, which we explicitly set to UTC.
-    # NOTE: git --date is supposed to support the %-m/%-d format too, but it does not seem to
-    # work on Windows. Without it we get leading zeros for month and day.
-    last_commit_date=$(TZ=UTC git show --quiet --date="format-local:%Y-%m-%d" --format="%cd")
-    last_commit_date_stripped=$(date --date="$last_commit_date" "+%Y.%-m.%-d")
-    echo -n "${prerelease_source}.${last_commit_date_stripped}" > prerelease.txt
-fi
+"${ROOTDIR}/scripts/prerelease_suffix.sh" "$prerelease_source" "$CIRCLE_TAG" > prerelease.txt
 
 mkdir -p build/
 cd build/
