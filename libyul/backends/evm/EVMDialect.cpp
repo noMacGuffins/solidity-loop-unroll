@@ -136,7 +136,7 @@ std::set<std::string, std::less<>> createReservedIdentifiers(langutil::EVMVersio
 	// clz for VMs before osaka.
 	auto clzException = [&](evmasm::Instruction _instr) -> bool
 	{
-		return _instr == evmasm::Instruction::CLZ && _evmVersion < langutil::EVMVersion::osaka();
+		return _instr == evmasm::Instruction::CLZ && !_evmVersion.hasCLZ();
 	};
 
 	auto eofIdentifiersException = [&](evmasm::Instruction _instr) -> bool
