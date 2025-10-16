@@ -67,10 +67,7 @@ At least a day before the release:
 - [ ] Wait for the CI runs on the tag itself.
 
 ### Upload Release Artifacts and Publish Binaries
-- [ ] Switch to the tag that archives have to be created for.
-- [ ] Create the `prerelease.txt` file: `echo -n > prerelease.txt`.
-- [ ] Run `scripts/create_source_tarball.sh` to create the source tarball. This will create the tarball in a directory called `upload`.
-- [ ] Take the tarball from the upload directory (its name should be `solidity_x.x.x.tar.gz`, otherwise `prerelease.txt` was missing in the step before) and upload it to the release page.
+- [ ] Take the source tarball (`solidity_x.x.x.tar.gz`) from `c_source_tarball` run of the tagged commit on Circle CI and upload it to the release page.
 - [ ] Take the `github-binaries.tar` tarball from `c_release_binaries` run of the tagged commit on Circle CI and add all binaries from it to the release page.
       Make sure it contains four binaries: `solc-windows.exe`, `solc-macos`, `solc-static-linux` and `soljson.js`.
 - [ ] Take the `solc-bin-binaries.tar` tarball from `c_release_binaries` run of the tagged commit on Circle CI and add all binaries from it to solc-bin.
@@ -135,10 +132,7 @@ At least a day before the release:
     - Check the `Set as a pre-release` box.
     - Click the `Publish release` button on the release page, creating the tag.
 - [ ] Wait for the CI runs on the tag itself.
-- [ ] Switch to the tag that archives have to be created for.
-- [ ] Create the `prerelease.txt` file: `scripts/prerelease_suffix.sh pre "$(git describe --tags --exact-match)" > prerelease.txt`.
-- [ ] Run `scripts/create_source_tarball.sh` to create the source tarball. This will create the tarball in a directory called `upload`.
-- [ ] Take the tarball from the upload directory (its name should be `solidity_x.x.x-pre.N.tar.gz`, if `prerelease.txt` was created correctly) and upload it to the release page.
+- [ ] Take the source tarball (`solidity_x.x.x-pre.N.tar.gz`) from `c_source_tarball` run of the tagged commit on Circle CI and upload it to the release page.
 - [ ] Take the `github-binaries.tar` tarball from `c_release_binaries` run of the tagged commit on Circle CI and add all binaries from it to the release page.
       Make sure it contains four binaries: `solc-windows.exe`, `solc-macos`, `solc-static-linux` and `soljson.js`.
 - [ ] Take the `solc-bin-binaries.tar` tarball from `c_release_binaries` run of the tagged commit on Circle CI and add all binaries from it to solc-bin.
