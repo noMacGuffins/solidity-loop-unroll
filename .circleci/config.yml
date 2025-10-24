@@ -15,6 +15,10 @@ parameters:
     type: string
     # ghcr.io/argotorg/solidity-buildpack-deps:ubuntu2404-6
     default: "ghcr.io/argotorg/solidity-buildpack-deps@sha256:c0412c53e59ce0c96bde4c08e7332ea12e4cadba9bbac829621947897fa21272"
+  ubuntu-2404-arm-docker-image:
+    type: string
+    # ghcr.io/argotorg/solidity-buildpack-deps:ubuntu2404.arm-1
+    default: "ghcr.io/argotorg/solidity-buildpack-deps@sha256:6cdb928fa8743d0b5d515c2c489b8d545c541f2370af28d5d3a71532056a0f22"
   ubuntu-2404-clang-docker-image:
     type: string
     # ghcr.io/argotorg/solidity-buildpack-deps:ubuntu2404.clang-7
@@ -606,6 +610,24 @@ defaults:
         MAKEFLAGS: -j 5
         CPUs: 5
 
+  - base_ubuntu2404_arm_medium: &base_ubuntu2404_arm_medium
+      docker:
+        - image: << pipeline.parameters.ubuntu-2404-arm-docker-image >>
+      resource_class: arm.medium
+      environment: &base_ubuntu2404_arm_medium_env
+        TERM: xterm
+        MAKEFLAGS: -j 2
+        CPUs: 2
+
+  - base_ubuntu2404_arm_large: &base_ubuntu2404_arm_large
+      docker:
+        - image: << pipeline.parameters.ubuntu-2404-arm-docker-image >>
+      resource_class: arm.large
+      environment: &base_ubuntu2404_arm_large_env
+        TERM: xterm
+        MAKEFLAGS: -j 7
+        CPUs: 7
+
   - base_ubuntu2404_xlarge: &base_ubuntu2404_xlarge
       <<: *base_ubuntu2404
       resource_class: xlarge
@@ -1070,6 +1092,31 @@ jobs:
           root: build
           paths:
             - solc/solc-static-linux
+      - matrix_notify_failure_unless_pr
+
+  b_ubu_static_arm:
+    <<: *base_ubuntu2404_arm_large
+    environment:
+      <<: *base_ubuntu2404_arm_large_env
+      CMAKE_OPTIONS: -DCMAKE_BUILD_TYPE=Release -DSOLC_LINK_STATIC=ON
+    steps:
+      - checkout
+      - run_build
+      - run:
+          name: strip binary
+          command: strip build/solc/solc
+      - store_artifacts:
+          path: build/solc/solc
+          destination: solc-static-linux-arm
+      - run: mv build/solc/solc build/solc/solc-static-linux-arm
+      - run: mv build/solc/soltest build/solc/soltest-linux-arm
+      - run: mv build/solc/solfuzzer build/solc/solfuzzer-linux-arm
+      - persist_to_workspace:
+          root: build
+          paths:
+            - solc/solc-static-linux-arm
+            - test/soltest-linux-arm
+            - test/tools/solfuzzer-linux-arm
       - matrix_notify_failure_unless_pr
 
   b_ubu_min_req:
@@ -1770,6 +1817,22 @@ jobs:
           binary_path: "build/solc/Release/solc.exe"
           preset: "<< parameters.preset >>"
 
+  b_bytecode_ubu_arm:
+    parameters:
+      preset:
+        type: string
+    <<: *base_ubuntu2404_arm_medium
+    parallelism: 2 # For prepare_bytecode_report
+    steps:
+      - checkout
+      - attach_workspace:
+          at: build
+      - prepare_bytecode_report:
+          label: "ubuntu_arm"
+          binary_type: native
+          binary_path: "build/solc/solc-static-linux-arm"
+          preset: "<< parameters.preset >>"
+
   b_bytecode_ems:
     parameters:
       preset:
@@ -1910,6 +1973,7 @@ workflows:
 
       # Static build
       - b_ubu_static: *requires_nothing
+      - b_ubu_static_arm: *requires_nothing
 
       # Ubuntu build and tests
       - b_ubu: *requires_nothing
@@ -1990,6 +2054,11 @@ workflows:
           matrix: *bytecode_compare_preset_matrix
           requires:
             - b_ubu
+      - b_bytecode_ubu_arm:
+          <<: *on_all_tags_and_branches
+          matrix: *bytecode_compare_preset_matrix
+          requires:
+            - b_ubu_static_arm
       - b_bytecode_win:
           <<: *on_all_tags_and_branches
           matrix: *bytecode_compare_preset_matrix
@@ -2015,6 +2084,7 @@ workflows:
           requires:
             - b_bytecode_ubu_static
             - b_bytecode_ubu
+            - b_bytecode_ubu_arm
             - b_bytecode_win
             - b_bytecode_osx
             - b_bytecode_osx_intel
