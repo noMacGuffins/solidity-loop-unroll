@@ -69,7 +69,7 @@ At least a day before the release:
 ### Upload Release Artifacts and Publish Binaries
 - [ ] Take the source tarball (`solidity_x.x.x.tar.gz`) from `c_source_tarball` run of the tagged commit on Circle CI and upload it to the release page.
 - [ ] Take the `github-binaries.tar` tarball from `c_release_binaries` run of the tagged commit on Circle CI and add all binaries from it to the release page.
-      Make sure it contains four binaries: `solc-windows.exe`, `solc-macos`, `solc-static-linux` and `soljson.js`.
+      Make sure it contains five binaries: `solc-windows.exe`, `solc-macos`, `solc-static-linux`, `solc-static-linux-arm`, and `soljson.js`.
 - [ ] Take the `solc-bin-binaries.tar` tarball from `c_release_binaries` run of the tagged commit on Circle CI and add all binaries from it to solc-bin.
 - [ ] Run `npm install` if you've got a clean checkout of the solc-bin repo.
 - [ ] Run `npm run update -- --reuse-hashes` in `solc-bin` and verify that the script has updated `list.js`, `list.txt` and `list.json` files correctly and that symlinks to the new release have been added in `solc-bin/wasm/` and `solc-bin/emscripten-wasm32/`.
@@ -134,7 +134,7 @@ At least a day before the release:
 - [ ] Wait for the CI runs on the tag itself.
 - [ ] Take the source tarball (`solidity_x.x.x-pre.N.tar.gz`) from `c_source_tarball` run of the tagged commit on Circle CI and upload it to the release page.
 - [ ] Take the `github-binaries.tar` tarball from `c_release_binaries` run of the tagged commit on Circle CI and add all binaries from it to the release page.
-      Make sure it contains four binaries: `solc-windows.exe`, `solc-macos`, `solc-static-linux` and `soljson.js`.
+      Make sure it contains five binaries: `solc-windows.exe`, `solc-macos`, `solc-static-linux`, `solc-static-linux-arm` and `soljson.js`.
 - [ ] Take the `solc-bin-binaries.tar` tarball from `c_release_binaries` run of the tagged commit on Circle CI and add all binaries from it to solc-bin.
 - [ ] Run `npm install` if you've got a clean checkout of the solc-bin repo.
 - [ ] Run `npm run update -- --reuse-hashes` in `solc-bin` and verify that the script has updated `list.js`, `list.txt` and `list.json` files correctly and that symlinks to the new release have been added in `solc-bin/wasm/` and `solc-bin/emscripten-wasm32/`.

@@ -284,6 +284,16 @@ commands:
             - test/soltest
             - test/tools/solfuzzer
 
+  persist_executables_to_workspace_arm:
+    description: Persist compiled target executables to workspace on Linux arm64
+    steps:
+      - persist_to_workspace:
+          root: build
+          paths:
+            - solc/solc-static-linux-arm
+            - test/soltest-linux-arm
+            - test/tools/solfuzzer-linux-arm
+
   persist_executables_to_workspace_osx:
     description: Persist compiled target executables to workspace on macOS
     steps:
@@ -1109,14 +1119,9 @@ jobs:
           path: build/solc/solc
           destination: solc-static-linux-arm
       - run: mv build/solc/solc build/solc/solc-static-linux-arm
-      - run: mv build/solc/soltest build/solc/soltest-linux-arm
-      - run: mv build/solc/solfuzzer build/solc/solfuzzer-linux-arm
-      - persist_to_workspace:
-          root: build
-          paths:
-            - solc/solc-static-linux-arm
-            - test/soltest-linux-arm
-            - test/tools/solfuzzer-linux-arm
+      - run: mv build/test/soltest build/test/soltest-linux-arm
+      - run: mv build/test/tools/solfuzzer build/test/tools/solfuzzer-linux-arm
+      - persist_executables_to_workspace_arm
       - matrix_notify_failure_unless_pr
 
   b_ubu_min_req:
@@ -1874,10 +1879,11 @@ jobs:
           name: Gather and rename binaries from dependent jobs
           command: |
             mkdir github/
-            cp workspace/solc/solc-static-linux github/solc-static-linux
-            cp workspace/build/solc/solc        github/solc-macos
-            cp workspace/solc/Release/solc.exe  github/solc-windows.exe
-            cp workspace/soljson.js             github/soljson.js
+            cp workspace/solc/solc-static-linux     github/solc-static-linux
+            cp workspace/solc/solc-static-linux-arm github/solc-static-linux-arm
+            cp workspace/build/solc/solc            github/solc-macos
+            cp workspace/solc/Release/solc.exe      github/solc-windows.exe
+            cp workspace/soljson.js                 github/soljson.js
 
             cd github/
             tar --create --file ../github-binaries.tar *
@@ -1891,12 +1897,13 @@ jobs:
               sed -En 's/^Version: ([0-9.]+.*\+commit\.[0-9a-f]+(\.mod)?).*$/\1/p'
             )
 
-            mkdir -p solc-bin/{linux-amd64,macosx-amd64,windows-amd64,bin}
+            mkdir -p solc-bin/{linux-amd64,linux-arm64,macosx-amd64,windows-amd64,bin}
 
-            mv github/solc-static-linux "solc-bin/linux-amd64/solc-linux-amd64-v${full_version}"
-            mv github/solc-macos        "solc-bin/macosx-amd64/solc-macosx-amd64-v${full_version}"
-            mv github/solc-windows.exe  "solc-bin/windows-amd64/solc-windows-amd64-v${full_version}.exe"
-            mv github/soljson.js        "solc-bin/bin/soljson-v${full_version}.js"
+            mv github/solc-static-linux-arm "solc-bin/linux-arm64/solc-linux-arm64-v${full_version}"
+            mv github/solc-static-linux     "solc-bin/linux-amd64/solc-linux-amd64-v${full_version}"
+            mv github/solc-macos            "solc-bin/macosx-amd64/solc-macosx-amd64-v${full_version}"
+            mv github/solc-windows.exe      "solc-bin/windows-amd64/solc-windows-amd64-v${full_version}.exe"
+            mv github/soljson.js            "solc-bin/bin/soljson-v${full_version}.js"
 
             cd solc-bin/
             tar --create --file ../solc-bin-binaries.tar *
@@ -2094,6 +2101,7 @@ workflows:
       - c_release_binaries:
           <<: *on_version_tags
           requires:
+            - b_ubu_static_arm
             - b_ubu_static
             - b_osx
             - b_win
