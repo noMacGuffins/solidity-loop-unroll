@@ -1,5 +1,3 @@
-// This loop should NOT be unrolled because it's not affine
-// (the increment is not constant).
 {
     function f() -> sum {
         sum := 0
@@ -12,4 +10,12 @@
 // ----
 // step: loopUnrolling
 //
-// Expected: No change (loop is not affine)
+// {
+//     function f() -> sum
+//     {
+//         sum := 0
+//         let i := 1
+//         for { } lt(i, 100) { i := mul(i, 2) }
+//         { sum := add(sum, i) }
+//     }
+// }

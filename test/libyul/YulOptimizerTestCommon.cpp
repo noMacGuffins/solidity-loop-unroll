@@ -42,6 +42,7 @@
 #include <libyul/optimiser/ForLoopInitRewriter.h>
 #include <libyul/optimiser/LoadResolver.h>
 #include <libyul/optimiser/LoopInvariantCodeMotion.h>
+#include <libyul/optimiser/LoopUnrolling.h>
 #include <libyul/optimiser/StackLimitEvader.h>
 #include <libyul/optimiser/NameDisplacer.h>
 #include <libyul/optimiser/Rematerialiser.h>
@@ -358,6 +359,14 @@ YulOptimizerTestCommon::YulOptimizerTestCommon(std::shared_ptr<Object const> _ob
 			ForLoopInitRewriter::run(*m_context, block);
 			FunctionHoister::run(*m_context, block);
 			LoopInvariantCodeMotion::run(*m_context, block);
+			return block;
+		}},
+		{"loopUnrolling", [&]() {
+			auto block = disambiguate();
+			updateContext(block);
+			ForLoopInitRewriter::run(*m_context, block);
+			FunctionHoister::run(*m_context, block);
+			LoopUnrolling::run(*m_context, block);
 			return block;
 		}},
 		{"controlFlowSimplifier", [&]() {
