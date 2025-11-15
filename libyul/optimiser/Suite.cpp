@@ -60,6 +60,7 @@
 #include <libyul/optimiser/VarNameCleaner.h>
 #include <libyul/optimiser/LoadResolver.h>
 #include <libyul/optimiser/LoopInvariantCodeMotion.h>
+#include <libyul/optimiser/LoopUnrolling.h>
 #include <libyul/optimiser/Metrics.h>
 #include <libyul/optimiser/NameSimplifier.h>
 #include <libyul/backends/evm/ConstantOptimiser.h>
@@ -252,6 +253,7 @@ std::map<std::string, std::unique_ptr<OptimiserStep>> const& OptimiserSuite::all
 			LiteralRematerialiser,
 			LoadResolver,
 			LoopInvariantCodeMotion,
+			LoopUnrolling,
 			UnusedAssignEliminator,
 			UnusedStoreEliminator,
 			Rematerialiser,
@@ -293,6 +295,7 @@ std::map<std::string, char> const& OptimiserSuite::stepNameToAbbreviationMap()
 		{LiteralRematerialiser::name,         'T'},
 		{LoadResolver::name,                  'L'},
 		{LoopInvariantCodeMotion::name,       'M'},
+		{LoopUnrolling::name,                 'R'},
 		{UnusedAssignEliminator::name,        'r'},
 		{UnusedStoreEliminator::name,         'S'},
 		{Rematerialiser::name,                'm'},

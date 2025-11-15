@@ -149,6 +149,10 @@ add_library(yul
 	optimiser/LoadResolver.h
 	optimiser/LoopInvariantCodeMotion.cpp
 	optimiser/LoopInvariantCodeMotion.h
+	optimiser/LoopUnrolling.cpp
+	optimiser/LoopUnrolling.h
+	optimiser/LoopUnrollingAnalysis.cpp
+	optimiser/LoopUnrollingAnalysis.h
 	optimiser/Metrics.cpp
 	optimiser/Metrics.h
 	optimiser/NameCollector.cpp
