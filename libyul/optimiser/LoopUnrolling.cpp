@@ -162,6 +162,7 @@ std::optional<std::vector<Statement>> LoopUnrolling::rewriteLoop(
 	
 	for (size_t iteration = 0; iteration < unrollFactor; ++iteration)
 	{
+		
 		// Create a literal expression for the current induction variable value and store it
 		literals.emplace_back(Literal{
 			_for.debugData,

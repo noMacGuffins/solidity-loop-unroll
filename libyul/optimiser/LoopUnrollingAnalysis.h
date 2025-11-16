@@ -141,8 +141,7 @@ private:
 	Dialect const& m_dialect;
 	
 	// Tuning parameters - these control the aggressiveness of unrolling
-	static constexpr size_t MAX_ITERATIONS_TO_UNROLL = 8;  // Only fully unroll loops with at most this many iterations
-	static constexpr size_t CODE_SIZE_THRESHOLD = 100;     // Max body size to consider unrolling
+	static constexpr size_t MAX_CONTRACT_SIZE = 24576;  // Ethereum max contract size in bytes (EIP-170)
 	
 	// Gas cost constants (approximations for EVM)
 	static constexpr size_t GAS_JUMPI = 10;           // Conditional jump for loop condition

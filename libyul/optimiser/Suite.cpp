@@ -126,7 +126,10 @@ void OptimiserSuite::run(
 
 	// Some steps depend on properties ensured by FunctionHoister, BlockFlattener, FunctionGrouper and
 	// ForLoopInitRewriter. Run them first to be able to run arbitrary sequences safely.
-	suite.runSequence("hgfo", astRoot);
+	// LoopUnrolling runs right after ForLoopInitRewriter to enable subsequent optimizations.
+	// Dead code elimination, unused assignment elimination, expression simplification, and CSE
+	// run after loop unrolling to clean up the unrolled code.
+	suite.runSequence("hgfoRDrsc", astRoot);
 
 	// Now the user-supplied part
 	suite.runSequence(_optimisationSequence, astRoot);

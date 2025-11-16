@@ -60,18 +60,20 @@ UnrollDecision LoopUnrollingAnalysis::analyzeLoop(
 		return decision;
 	}
 	
-	// Don't unroll loops that are too large
-	if (iterCount.value() > MAX_ITERATIONS_TO_UNROLL)
-	{
-		decision.reason = "Too many iterations for full unrolling: " + std::to_string(iterCount.value());
-		return decision;
-	}
-	
-	// Step 3: Check code size constraints
+	// Step 3: Check that unrolling won't exceed Ethereum contract size limit
+	// Calculate the size of unrolled code
 	size_t bodySize = CodeSize::codeSize(_loop.body);
-	if (bodySize > CODE_SIZE_THRESHOLD)
+	size_t postSize = CodeSize::codeSize(_loop.post);
+	size_t unrolledSize = (bodySize + postSize) * iterCount.value();
+	
+	// Rough heuristic: 1 AST node ≈ 4 bytes of bytecode
+	size_t estimatedBytecode = unrolledSize * 4;
+	
+	// Only unroll if the unrolled loop won't contribute more than 50% of max contract size
+	// This leaves room for the rest of the contract code
+	if (estimatedBytecode > MAX_CONTRACT_SIZE / 2)
 	{
-		decision.reason = "Loop body too large: " + std::to_string(bodySize);
+		decision.reason = "Unrolled loop would be too large: " + std::to_string(estimatedBytecode) + " bytes (limit: " + std::to_string(MAX_CONTRACT_SIZE / 2) + ")";
 		return decision;
 	}
 	
