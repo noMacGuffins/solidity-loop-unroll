@@ -60,11 +60,20 @@ private:
 	{ }
 
 	/// @returns true if the given loop should be unrolled based on heuristics.
-	bool shouldUnroll(ForLoop const& _loop, size_t& _outUnrollFactor);
+	bool shouldUnroll(
+		ForLoop const& _loop,
+		std::vector<Statement> const& _blockStatements,
+		size_t _loopIndex,
+		size_t& _outUnrollFactor
+	);
 	
 	/// Performs the actual loop unrolling transformation.
 	/// @returns the unrolled statements if successful, nullopt otherwise.
-	std::optional<std::vector<Statement>> rewriteLoop(ForLoop& _for);
+	std::optional<std::vector<Statement>> rewriteLoop(
+		ForLoop& _for,
+		std::vector<Statement> const& _blockStatements,
+		size_t _loopIndex
+	);
 
 	Dialect const& m_dialect;
 	std::set<YulName> const& m_ssaVariables;
