@@ -123,12 +123,10 @@ void OptimiserSuite::run(
 	OptimiserStepContext context{dialect, dispenser, reservedIdentifiers, _expectedExecutionsPerDeployment};
 
 	OptimiserSuite suite(context, Debug::None);
-	suite.runSequence("R", astRoot);
 
 	// Some steps depend on properties ensured by FunctionHoister, BlockFlattener, FunctionGrouper and
 	// ForLoopInitRewriter. Run them first to be able to run arbitrary sequences safely.
 	suite.runSequence("hgfo", astRoot);
-	suite.runSequence("Drsc", astRoot);
 
 	// Now the user-supplied part
 	suite.runSequence(_optimisationSequence, astRoot);
@@ -155,6 +153,7 @@ void OptimiserSuite::run(
 	// Hard-coded FunctionGrouper step is used to bring the AST into a canonical form required by the StackCompressor
 	// and StackLimitEvader. This is hard-coded as the last step, as some previously executed steps may break the
 	// aforementioned form, thus causing the StackCompressor/StackLimitEvader to throw.
+	
 	suite.runSequence("g", astRoot);
 
 	if (evmDialect)

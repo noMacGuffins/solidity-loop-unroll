@@ -27,7 +27,6 @@
 #include <libsolutil/CommonData.h>
 
 #include <utility>
-#include <iostream>
 #include <map>
 
 using namespace solidity;
@@ -35,8 +34,6 @@ using namespace solidity::yul;
 
 void LoopUnrolling::run(OptimiserStepContext& _context, Block& _ast)
 {
-	std::cerr << "*** LoopUnrolling::run() called ***" << std::endl;
-	
 	// Gather SSA variables for analysis
 	std::set<YulName> ssaVars = SSAValueTracker::ssaVariables(_ast);
 	
@@ -49,8 +46,6 @@ void LoopUnrolling::run(OptimiserStepContext& _context, Block& _ast)
 
 void LoopUnrolling::operator()(Block& _block)
 {
-	std::cerr << "*** LoopUnrolling::operator() called on block with " << _block.statements.size() << " statements ***" << std::endl;
-	
 	util::iterateReplacing(
 		_block.statements,
 		[&, this](Statement& _s) -> std::optional<std::vector<Statement>>
@@ -58,8 +53,6 @@ void LoopUnrolling::operator()(Block& _block)
 			visit(_s);
 			if (std::holds_alternative<ForLoop>(_s))
 			{
-				std::cerr << "*** Found a ForLoop! ***" << std::endl;
-				
 				// Find the index of this loop in the block
 				size_t loopIndex = 0;
 				for (size_t i = 0; i < _block.statements.size(); ++i)
@@ -87,13 +80,6 @@ bool LoopUnrolling::shouldUnroll(
 {
 	// Use the analyzer to make the decision
 	UnrollDecision decision = m_analyzer.analyzeLoop(_loop, _blockStatements, _loopIndex, m_ssaVariables);
-
-	// Debug output
-	std::cerr << "=== LoopUnrolling Decision ===" << std::endl;
-	std::cerr << "shouldUnroll: " << (decision.shouldUnroll ? "true" : "false") << std::endl;
-	std::cerr << "unrollFactor: " << decision.unrollFactor << std::endl;
-	std::cerr << "reason: " << decision.reason << std::endl;
-	std::cerr << "================================" << std::endl;
 	
 	// Note: m_dialect will be used in rewriteLoop() for AST construction
 	(void)m_dialect;  // Suppress unused warning for now

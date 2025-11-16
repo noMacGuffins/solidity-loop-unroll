@@ -101,15 +101,31 @@ std::optional<std::tuple<YulName, bool, u256>> LoopUnrollingAnalysis::extractInd
 	size_t _loopIndex
 )
 {
+	std::cerr << "DEBUG: extractInductionVariable called" << std::endl;
+	
 	// Step 1: Find the induction variable from the loop condition
 	// Must have a condition
 	if (!_loop.condition)
+	{
+		std::cerr << "DEBUG: No condition" << std::endl;
 		return std::nullopt;
+	}
+	
+	std::cerr << "DEBUG: Condition expression index: " << _loop.condition->index() << std::endl;
 	
 	// Condition must be a function call (comparison)
 	auto const* condCall = std::get_if<FunctionCall>(_loop.condition.get());
-	if (!condCall || condCall->arguments.size() != 2)
+	if (!condCall)
+	{
+		std::cerr << "DEBUG: Condition is not a FunctionCall (might be Identifier or Literal)" << std::endl;
+		// TODO: Handle case where condition is an Identifier (variable holding the condition result)
 		return std::nullopt;
+	}
+	if (condCall->arguments.size() != 2)
+	{
+		std::cerr << "DEBUG: Wrong argument count: " << condCall->arguments.size() << std::endl;
+		return std::nullopt;
+	}
 	
 	// Extract function name
 	std::string condOp;
@@ -154,6 +170,10 @@ std::optional<std::tuple<YulName, bool, u256>> LoopUnrollingAnalysis::extractInd
 	// Step 2: Search for the initial value of the induction variable
 	// First check the loop's PRE block (most common case for for-loops)
 	std::optional<u256> initValue;
+	
+	std::cerr << "DEBUG: Looking for induction var: " << inductionVar.str() << std::endl;
+	std::cerr << "DEBUG: PRE block has " << _loop.pre.statements.size() << " statements" << std::endl;
+	std::cerr << "DEBUG: _blockStatements has " << _blockStatements.size() << " statements, loopIndex=" << _loopIndex << std::endl;
 	
 	for (auto const& stmt : _loop.pre.statements)
 	{
