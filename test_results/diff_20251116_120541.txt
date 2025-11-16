@@ -1,0 +1,39 @@
+Test Counts:
+════════════════════════════════════════════════════════════
+  Baseline: 7755 passing, 0
+0 failing
+  New:      7767 passing, 0
+0 failing
+
+✅ Newly Passing Tests (14):
+────────────────────────────────────────────────────────────
+  yulOptimizerTests/loopUnrolling/affine_loop_basic.yul
+  yulOptimizerTests/loopUnrolling/affine_loop_countdown.yul
+  yulOptimizerTests/loopUnrolling/affine_loop_function_call_bound.yul
+  yulOptimizerTests/loopUnrolling/affine_loop_multiple_init.yul
+  yulOptimizerTests/loopUnrolling/affine_loop_step_by_5.yul
+  yulOptimizerTests/loopUnrolling/affine_loop_var_second_position.yul
+  yulOptimizerTests/loopUnrolling/mixed_operations_rejected.yul
+  yulOptimizerTests/loopUnrolling/multiple_updates_add.yul
+  yulOptimizerTests/loopUnrolling/multiple_updates_sub.yul
+  yulOptimizerTests/loopUnrolling/non_affine_modified_in_body.yul
+  yulOptimizerTests/loopUnrolling/non_affine_no_condition.yul
+  yulOptimizerTests/loopUnrolling/three_updates_combined.yul
+  yulOptimizerTests/loopUnrolling/while_loop_basic.yul
+  yulOptimizerTests/loopUnrolling/while_loop_countdown.yul
+
+❌ Newly Failing Tests (1):
+────────────────────────────────────────────────────────────
+  
+
+⚠️  Still Failing Tests (1):
+────────────────────────────────────────────────────────────
+  
+
+════════════════════════════════════════════════════════════
+Summary:
+════════════════════════════════════════════════════════════
+✅ Net improvement: +12 passing tests
+  - 14 tests now passing
+  - 1 tests now failing
+

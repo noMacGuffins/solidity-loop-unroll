@@ -150,15 +150,13 @@ std::optional<std::tuple<YulName, bool, u256>> LoopUnrollingAnalysis::extractInd
 		return std::nullopt;
 	
 	// Step 2: Search for the initial value of the induction variable
-	// Look backwards through statements before the loop
+	// First check the loop's PRE block (most common case for for-loops)
 	std::optional<u256> initValue;
 	
-	for (size_t i = _loopIndex; i > 0; --i)
+	for (auto const& stmt : _loop.pre.statements)
 	{
-		size_t idx = i - 1;
-		
 		// Check for variable declaration: let i := <literal>
-		if (auto const* varDecl = std::get_if<VariableDeclaration>(&_blockStatements[idx]))
+		if (auto const* varDecl = std::get_if<VariableDeclaration>(&stmt))
 		{
 			for (size_t j = 0; j < varDecl->variables.size(); ++j)
 			{
@@ -167,6 +165,7 @@ std::optional<std::tuple<YulName, bool, u256>> LoopUnrollingAnalysis::extractInd
 					if (auto const* lit = std::get_if<Literal>(varDecl->value.get()))
 					{
 						initValue = lit->value.value();
+						std::cout << "DEBUG: Found initValue = " << initValue.value() << " in VarDecl\n";
 						break;
 					}
 				}
@@ -176,7 +175,7 @@ std::optional<std::tuple<YulName, bool, u256>> LoopUnrollingAnalysis::extractInd
 		}
 		
 		// Check for assignment: i := <literal>
-		if (auto const* assignment = std::get_if<Assignment>(&_blockStatements[idx]))
+		if (auto const* assignment = std::get_if<Assignment>(&stmt))
 		{
 			for (size_t j = 0; j < assignment->variableNames.size(); ++j)
 			{
@@ -191,6 +190,51 @@ std::optional<std::tuple<YulName, bool, u256>> LoopUnrollingAnalysis::extractInd
 			}
 			if (initValue.has_value())
 				break;
+		}
+	}
+	
+	// If not found in PRE block, look backwards through statements before the loop
+	if (!initValue.has_value())
+	{
+		for (size_t i = _loopIndex; i > 0; --i)
+		{
+			size_t idx = i - 1;
+			
+			// Check for variable declaration: let i := <literal>
+			if (auto const* varDecl = std::get_if<VariableDeclaration>(&_blockStatements[idx]))
+			{
+				for (size_t j = 0; j < varDecl->variables.size(); ++j)
+				{
+					if (varDecl->variables[j].name == inductionVar && varDecl->value)
+					{
+						if (auto const* lit = std::get_if<Literal>(varDecl->value.get()))
+						{
+							initValue = lit->value.value();
+							break;
+						}
+					}
+				}
+				if (initValue.has_value())
+					break;
+			}
+			
+			// Check for assignment: i := <literal>
+			if (auto const* assignment = std::get_if<Assignment>(&_blockStatements[idx]))
+			{
+				for (size_t j = 0; j < assignment->variableNames.size(); ++j)
+				{
+					if (assignment->variableNames[j].name == inductionVar)
+					{
+						if (auto const* lit = std::get_if<Literal>(assignment->value.get()))
+						{
+							initValue = lit->value.value();
+							break;
+						}
+					}
+				}
+				if (initValue.has_value())
+					break;
+			}
 		}
 	}
 	
@@ -688,10 +732,6 @@ bool LoopUnrollingAnalysis::shouldFullyUnroll(
 	size_t _estimatedRuns
 )
 {
-	std::cout << "\n=== Gas Analysis for Full Unrolling ===" << std::endl;
-	std::cout << "Iteration count: " << _iterCount << std::endl;
-	std::cout << "Estimated runs: " << _estimatedRuns << std::endl;
-	
 	// Calculate gas saved per run (not per iteration!)
 	// With full unrolling, the loop is completely eliminated, so we save:
 	// - All loop overhead (_iterCount times)
@@ -707,14 +747,6 @@ bool LoopUnrollingAnalysis::shouldFullyUnroll(
 	
 	// Net benefit
 	int64_t netGasSaved = static_cast<int64_t>(totalGasSaved) - static_cast<int64_t>(gasIncrease);
-	
-	std::cout << "Gas saved per iteration: " << gasSavedPerIter << std::endl;
-	std::cout << "Gas saved per run: " << gasSavedPerRun << " (= " << gasSavedPerIter << " × " << _iterCount << " iterations)" << std::endl;
-	std::cout << "Total runtime saved: " << totalGasSaved << " (= " << gasSavedPerRun << " × " << _estimatedRuns << " runs)" << std::endl;
-	std::cout << "Deployment cost: " << gasIncrease << std::endl;
-	std::cout << "Net gas saved: " << netGasSaved << std::endl;
-	std::cout << "Decision: " << (netGasSaved > 0 ? "UNROLL" : "DON'T UNROLL") << std::endl;
-	std::cout << "============================\n" << std::endl;
 	
 	return netGasSaved > 0;
 }

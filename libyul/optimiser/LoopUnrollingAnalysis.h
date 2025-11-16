@@ -70,9 +70,6 @@ public:
 		std::set<YulName> const& _ssaVariables
 	);
 
-private:
-	// ========== Possibility Checks ==========
-	
 	/// Extracts the induction variable and its initial value from the loop and preceding statements.
 	/// Returns the variable name, whether it's first arg in condition, and the initial value.
 	/// @param _loop The loop to analyze
@@ -84,6 +81,9 @@ private:
 		std::vector<Statement> const& _blockStatements,
 		size_t _loopIndex
 	);
+
+private:
+	// ========== Possibility Checks ==========
 	
 	/// Attempts to predict the iteration count of the loop.
 	/// Works for both for-loops (induction variable updated in post) and
