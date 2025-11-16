@@ -61,9 +61,9 @@ UnrollDecision LoopUnrollingAnalysis::analyzeLoop(
 	}
 	
 	// Don't unroll loops that are too large
-	if (iterCount.value() > MAX_TOTAL_ITERATIONS)
+	if (iterCount.value() > MAX_ITERATIONS_TO_UNROLL)
 	{
-		decision.reason = "Too many iterations: " + std::to_string(iterCount.value());
+		decision.reason = "Too many iterations for full unrolling: " + std::to_string(iterCount.value());
 		return decision;
 	}
 	
@@ -75,30 +75,20 @@ UnrollDecision LoopUnrollingAnalysis::analyzeLoop(
 		return decision;
 	}
 	
-	// Step 4: Check effectiveness - does unrolling provide benefits?
-	bool conditionHeavy = isConditionHeavy(_loop);
-	bool bodyOptimizable = isBodyOptimizable(_loop);
-	
-	if (!conditionHeavy && !bodyOptimizable)
+	// Step 4: Gas-based cost-benefit analysis for full unrolling
+	// Use estimated runs of 200 as default if not available (typical for deployed contracts)
+	size_t estimatedRuns = 200;
+	if (!shouldFullyUnroll(_loop, inductionVar, iterCount.value(), estimatedRuns))
 	{
-		decision.reason = "No significant benefit from unrolling";
+		decision.reason = "Gas cost-benefit analysis suggests no unrolling";
 		return decision;
 	}
 	
-	// Step 5: Determine the optimal unroll factor
-	size_t unrollFactor = determineUnrollFactor(_loop, iterCount.value());
-	if (unrollFactor == 0)
-	{
-		decision.reason = "Cost-benefit analysis suggests no unrolling";
-		return decision;
-	}
-	
-	// Decision: Unroll!
+	// Decision: Fully unroll!
 	decision.shouldUnroll = true;
-	decision.unrollFactor = unrollFactor;
-	decision.reason = "Unrolling beneficial (iterations: " + 
-		std::to_string(iterCount.value()) + ", factor: " + 
-		std::to_string(unrollFactor) + ")";
+	decision.unrollFactor = iterCount.value();  // Full unrolling
+	decision.reason = "Full unrolling beneficial (iterations: " + 
+		std::to_string(iterCount.value()) + ")";
 	
 	return decision;
 }
@@ -469,98 +459,262 @@ std::optional<size_t> LoopUnrollingAnalysis::predictIterationCount(
 	}
 }
 
-bool LoopUnrollingAnalysis::isConditionHeavy(ForLoop const& _loop)
-{
-	// TODO: Implement condition complexity analysis
-	// Count the number of operations in the condition expression
-	// Consider it "heavy" if it exceeds MIN_CONDITION_COMPLEXITY
-	
-	if (!_loop.condition)
-		return false;
-	
-	// For now, use a simple metric: any non-trivial condition is considered heavy
-	// A trivial condition is just an identifier or literal
-	if (std::holds_alternative<Identifier>(*_loop.condition) ||
-		std::holds_alternative<Literal>(*_loop.condition))
-		return false;
-	
-	return true;  // Conservative: assume other conditions are heavy
-}
-
-bool LoopUnrollingAnalysis::isBodyOptimizable(ForLoop const& _loop)
-{
-	// Body is optimizable if it has memory locality or CSE opportunities
-	return hasMemoryLocality(_loop) || hasCSEOpportunities(_loop);
-}
-
-bool LoopUnrollingAnalysis::hasMemoryLocality(ForLoop const& _loop)
-{
-	// TODO: Implement memory locality analysis
-	// This requires:
-	// 1. Identifying memory access patterns (mload/mstore)
-	// 2. Checking if accesses are to sequential or strided locations
-	// 3. Determining if the induction variable is used in address calculations
-	
-	(void)_loop;  // Suppress unused warning
-	// For now, return false (conservative)
-	return false;
-}
-
-bool LoopUnrollingAnalysis::hasCSEOpportunities(ForLoop const& _loop)
-{
-	// TODO: Implement CSE opportunity detection
-	// This requires:
-	// 1. Finding repeated subexpressions in the loop body
-	// 2. Checking if they would become loop-invariant after unrolling
-	
-	(void)_loop;  // Suppress unused warning
-	// For now, return false (conservative)
-	return false;
-}
-
-size_t LoopUnrollingAnalysis::estimateUnrollBenefit(
+size_t LoopUnrollingAnalysis::approximateGasSavedPerIteration(
 	ForLoop const& _loop,
-	size_t _iterCount,
-	size_t _factor
+	YulName const& _inductionVar
 )
 {
-	// TODO: Implement cost-benefit estimation
-	// Benefits:
-	// - Eliminated loop overhead (condition checks, jumps)
-	// - Better optimization opportunities (CSE, constant propagation)
-	// - Improved instruction scheduling
-	//
-	// Costs:
-	// - Increased code size
-	// - Potential instruction cache pressure
+	size_t gasSaved = 0;
 	
-	(void)_loop;       // Suppress unused warning
-	(void)_iterCount;  // Suppress unused warning
-	(void)_factor;     // Suppress unused warning
-	// For now, return 0 (no benefit)
-	return 0;
+	// 1. Loop condition evaluation cost saved
+	// Each iteration eliminates one condition check and conditional jump
+	gasSaved += GAS_JUMPI;  // Conditional jump
+	
+	// Add cost of condition evaluation
+	if (_loop.condition)
+	{
+		if (auto const* call = std::get_if<FunctionCall>(_loop.condition.get()))
+		{
+			std::string op;
+			if (auto const* builtin = std::get_if<BuiltinName>(&call->functionName))
+				op = m_dialect.builtin(builtin->handle).name;
+			else if (auto const* ident = std::get_if<Identifier>(&call->functionName))
+				op = ident->name.str();
+			
+			if (op == "lt" || op == "gt" || op == "eq")
+				gasSaved += GAS_LT;  // Comparison operation
+		}
+	}
+	
+	// 2. Induction variable update cost (if only used for loop control)
+	// Check if induction variable is used in the body beyond loop control
+	bool inductionVarOnlyForControl = true;
+	
+	// Helper to check if identifier references the induction variable
+	auto checkIdentifier = [&](Expression const& expr) {
+		if (auto const* ident = std::get_if<Identifier>(&expr))
+			if (ident->name == _inductionVar)
+				inductionVarOnlyForControl = false;
+	};
+	
+	// Scan body for uses of induction variable
+	for (auto const& stmt : _loop.body.statements)
+	{
+		if (auto const* assignment = std::get_if<Assignment>(&stmt))
+		{
+			// Skip if this is updating the induction variable itself
+			bool isInductionUpdate = false;
+			for (auto const& var : assignment->variableNames)
+				if (var.name == _inductionVar)
+					isInductionUpdate = true;
+			
+			if (!isInductionUpdate && assignment->value)
+			{
+				if (auto const* call = std::get_if<FunctionCall>(assignment->value.get()))
+				{
+					for (auto const& arg : call->arguments)
+						checkIdentifier(arg);
+				}
+				else
+				{
+					checkIdentifier(*assignment->value);
+				}
+			}
+		}
+		else if (auto const* exprStmt = std::get_if<ExpressionStatement>(&stmt))
+		{
+			if (auto const* call = std::get_if<FunctionCall>(&exprStmt->expression))
+			{
+				for (auto const& arg : call->arguments)
+					checkIdentifier(arg);
+			}
+		}
+	}
+	
+	// If induction variable is only for control, we save the update cost
+	if (inductionVarOnlyForControl)
+	{
+		// Check POST block for update operations
+		for (auto const& stmt : _loop.post.statements)
+		{
+			if (auto const* assignment = std::get_if<Assignment>(&stmt))
+			{
+				if (assignment->value)
+				{
+					if (auto const* call = std::get_if<FunctionCall>(assignment->value.get()))
+					{
+						std::string op;
+						if (auto const* builtin = std::get_if<BuiltinName>(&call->functionName))
+							op = m_dialect.builtin(builtin->handle).name;
+						
+						if (op == "add") gasSaved += GAS_ADD;
+						else if (op == "sub") gasSaved += GAS_SUB;
+						else if (op == "mul") gasSaved += GAS_MUL;
+					}
+				}
+			}
+		}
+	}
+	
+	// 3. Memory locality improvements
+	// Check for multiple loads from the same memory location that are not modified in the loop
+	// After unrolling, CSE and LoadResolver can forward loads and eliminate redundant stores
+	
+	// Track memory locations that are loaded and stored
+	std::set<std::string> loadedLocations;
+	std::set<std::string> storedLocations;
+	size_t redundantStores = 0;
+	
+	// Helper to extract memory address as string (for simple cases)
+	auto extractMemAddr = [](std::vector<Expression> const& args) -> std::string {
+		if (args.empty())
+			return "";
+		if (auto const* lit = std::get_if<Literal>(&args[0]))
+			return lit->value.value().str();
+		if (auto const* ident = std::get_if<Identifier>(&args[0]))
+			return ident->name.str();
+		return "";
+	};
+	
+	// First pass: collect all loads and stores
+	for (auto const& stmt : _loop.body.statements)
+	{
+		// Check for mload in assignments: x := mload(addr)
+		if (auto const* assignment = std::get_if<Assignment>(&stmt))
+		{
+			if (assignment->value)
+			{
+				if (auto const* call = std::get_if<FunctionCall>(assignment->value.get()))
+				{
+					std::string funcName;
+					if (auto const* builtin = std::get_if<BuiltinName>(&call->functionName))
+						funcName = m_dialect.builtin(builtin->handle).name;
+					
+					if (funcName == "mload")
+					{
+						std::string addr = extractMemAddr(call->arguments);
+						if (!addr.empty())
+							loadedLocations.insert(addr);
+					}
+				}
+			}
+		}
+		// Check for mstore: mstore(addr, value)
+		else if (auto const* exprStmt = std::get_if<ExpressionStatement>(&stmt))
+		{
+			if (auto const* call = std::get_if<FunctionCall>(&exprStmt->expression))
+			{
+				std::string funcName;
+				if (auto const* builtin = std::get_if<BuiltinName>(&call->functionName))
+					funcName = m_dialect.builtin(builtin->handle).name;
+				
+				if (funcName == "mstore")
+				{
+					std::string addr = extractMemAddr(call->arguments);
+					if (!addr.empty())
+					{
+						if (storedLocations.count(addr))
+							redundantStores++;  // Same location stored multiple times
+						else
+							storedLocations.insert(addr);
+					}
+				}
+			}
+		}
+	}
+	
+	// Check if any loaded location is NOT modified (stored to) in the loop
+	for (auto const& loadAddr : loadedLocations)
+	{
+		if (!storedLocations.count(loadAddr))
+		{
+			// Location is loaded but never stored to in the loop
+			// After unrolling by factor N, each unrolled iteration can reuse values
+			// Original: iterCount loads per run
+			// After unroll: iterCount/N iterations, each loads once = iterCount/N loads
+			// Savings: iterCount - iterCount/N = iterationsEliminated loads
+			// Per eliminated iteration: 1 load saved
+			gasSaved += GAS_MLOAD;
+		}
+	}
+	
+	// For stores to the same location within a single iteration
+	// After unrolling, UnusedStoreEliminator can remove stores that are
+	// overwritten before being read (unless loop reads in between)
+	if (redundantStores > 0)
+	{
+		// If a location is stored to K times per iteration, after unrolling
+		// we might be able to eliminate K-1 of those stores per iteration
+		// But this only affects the unrolled iterations, not eliminated ones
+		// Conservative: assume we save 1 store per redundant store pattern
+		gasSaved += GAS_MSTORE * redundantStores;
+	}
+	
+	// 4. Jump elimination (unconditional jump back to loop start)
+	gasSaved += GAS_JUMP;
+	
+	return gasSaved;
 }
 
-size_t LoopUnrollingAnalysis::determineUnrollFactor(ForLoop const& _loop, size_t _iterCount)
+size_t LoopUnrollingAnalysis::approximateGasIncrease(
+	ForLoop const& _loop,
+	size_t _unrollFactor
+)
 {
-	// Simple strategy:
-	// 1. If iterations <= 4, fully unroll
-	// 2. If iterations <= MAX_TOTAL_ITERATIONS/2, partially unroll by factor of 2-4
-	// 3. Otherwise, don't unroll (return 0)
+	// Calculate the code size increase from unrolling
+	size_t bodySize = CodeSize::codeSize(_loop.body);
+	size_t postSize = CodeSize::codeSize(_loop.post);
 	
-	(void)_loop;  // For now, don't consider loop body size
+	// Unrolling by factor N means:
+	// - Body is replicated N times (minus 1 original)
+	// - POST block is replicated N times (minus 1 original)
+	// - We remove the loop overhead (condition + jumps)
 	
-	if (_iterCount == 0)
-		return 0;  // No iterations, no unrolling
+	size_t replicatedSize = (bodySize + postSize) * (_unrollFactor - 1);
 	
-	if (_iterCount <= 4)
-		return _iterCount;  // Fully unroll small loops
+	// Convert code size (AST nodes) to approximate bytecode size
+	// Rough heuristic: 1 AST node ≈ 3-5 bytes of bytecode
+	size_t bytecodeIncrease = replicatedSize * 4;
 	
-	if (_iterCount <= 16)
-		return 4;  // Unroll by 4x for medium loops
+	// Gas cost is deployment cost amortized over expected runs
+	// GAS_PER_BYTE already accounts for this (deployment cost / avg runs)
+	return bytecodeIncrease * GAS_PER_BYTE;
+}
+
+bool LoopUnrollingAnalysis::shouldFullyUnroll(
+	ForLoop const& _loop,
+	YulName const& _inductionVar,
+	size_t _iterCount,
+	size_t _estimatedRuns
+)
+{
+	std::cout << "\n=== Gas Analysis for Full Unrolling ===" << std::endl;
+	std::cout << "Iteration count: " << _iterCount << std::endl;
+	std::cout << "Estimated runs: " << _estimatedRuns << std::endl;
 	
-	if (_iterCount <= MAX_TOTAL_ITERATIONS)
-		return 2;  // Unroll by 2x for larger loops
+	// Calculate gas saved per run (not per iteration!)
+	// With full unrolling, the loop is completely eliminated, so we save:
+	// - All loop overhead (_iterCount times)
+	// - All optimizations enabled by unrolling
+	size_t gasSavedPerIter = approximateGasSavedPerIteration(_loop, _inductionVar);
+	size_t gasSavedPerRun = gasSavedPerIter * _iterCount;
 	
-	return 0;  // Too many iterations, don't unroll
+	// Total runtime savings over all runs
+	size_t totalGasSaved = gasSavedPerRun * _estimatedRuns;
+	
+	// Calculate deployment cost from code bloat (one-time cost)
+	size_t gasIncrease = approximateGasIncrease(_loop, _iterCount);
+	
+	// Net benefit
+	int64_t netGasSaved = static_cast<int64_t>(totalGasSaved) - static_cast<int64_t>(gasIncrease);
+	
+	std::cout << "Gas saved per iteration: " << gasSavedPerIter << std::endl;
+	std::cout << "Gas saved per run: " << gasSavedPerRun << " (= " << gasSavedPerIter << " × " << _iterCount << " iterations)" << std::endl;
+	std::cout << "Total runtime saved: " << totalGasSaved << " (= " << gasSavedPerRun << " × " << _estimatedRuns << " runs)" << std::endl;
+	std::cout << "Deployment cost: " << gasIncrease << std::endl;
+	std::cout << "Net gas saved: " << netGasSaved << std::endl;
+	std::cout << "Decision: " << (netGasSaved > 0 ? "UNROLL" : "DON'T UNROLL") << std::endl;
+	std::cout << "============================\n" << std::endl;
+	
+	return netGasSaved > 0;
 }

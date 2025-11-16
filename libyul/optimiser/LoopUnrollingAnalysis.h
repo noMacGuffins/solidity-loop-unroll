@@ -100,54 +100,61 @@ private:
 		u256 _initValue
 	);
 	
-	// ========== Effectiveness Checks ==========
+	// ========== Gas-Based Cost-Benefit Analysis ==========
 	
-	/// Checks if the loop condition is computationally heavy.
-	/// Heavy conditions benefit more from unrolling to reduce re-evaluation.
-	/// @returns true if the condition is considered heavy
-	bool isConditionHeavy(ForLoop const& _loop);
-	
-	/// Checks if the loop body has optimization opportunities from unrolling.
-	/// This includes memory locality and common subexpression elimination.
-	/// @returns true if the body would benefit from unrolling
-	bool isBodyOptimizable(ForLoop const& _loop);
-	
-	/// Checks if the loop body accesses memory locations that exhibit locality.
-	/// Sequential or stride-based access patterns benefit from unrolling.
-	/// @returns true if memory accesses show locality
-	bool hasMemoryLocality(ForLoop const& _loop);
-	
-	/// Checks if the loop body has common subexpressions that could be eliminated.
-	/// @returns true if CSE opportunities exist
-	bool hasCSEOpportunities(ForLoop const& _loop);
-	
-	// ========== Cost-Benefit Analysis ==========
-	
-	/// Estimates the benefit of unrolling the loop by a given factor.
-	/// Considers code size increase vs. performance gains.
+	/// Approximates the gas saved per iteration from unrolling.
+	/// Considers:
+	/// - Loop condition evaluation cost
+	/// - Induction variable update cost (if only used for loop control)
+	/// - Memory locality improvements (accessing same memory location)
 	/// @param _loop The loop to analyze
-	/// @param _iterCount The predicted iteration count
-	/// @param _factor The proposed unroll factor
-	/// @returns estimated benefit score (higher is better)
-	size_t estimateUnrollBenefit(
+	/// @param _inductionVar The induction variable name
+	/// @returns estimated gas saved per iteration
+	size_t approximateGasSavedPerIteration(
 		ForLoop const& _loop,
-		size_t _iterCount,
-		size_t _factor
+		YulName const& _inductionVar
 	);
 	
-	/// Determines the optimal unroll factor for a loop.
+	/// Approximates the gas increase from code size bloating.
 	/// @param _loop The loop to analyze
+	/// @param _unrollFactor The proposed unroll factor
+	/// @returns estimated gas increase from larger bytecode
+	size_t approximateGasIncrease(
+		ForLoop const& _loop,
+		size_t _unrollFactor
+	);
+	
+	/// Determines if full unrolling is profitable based on gas analysis.
+	/// Formula: gasIncrease < gasSavedPerIteration * iterations * estimatedRuns
+	/// @param _loop The loop to analyze
+	/// @param _inductionVar The induction variable name
 	/// @param _iterCount The predicted iteration count
-	/// @returns suggested unroll factor (0 means don't unroll)
-	size_t determineUnrollFactor(ForLoop const& _loop, size_t _iterCount);
+	/// @param _estimatedRuns Estimated number of times this code will run after deployment
+	/// @returns true if should fully unroll, false otherwise
+	bool shouldFullyUnroll(
+		ForLoop const& _loop,
+		YulName const& _inductionVar,
+		size_t _iterCount,
+		size_t _estimatedRuns
+	);
 
 	Dialect const& m_dialect;
 	
 	// Tuning parameters - these control the aggressiveness of unrolling
-	static constexpr size_t MAX_UNROLL_FACTOR = 8;
-	static constexpr size_t MAX_TOTAL_ITERATIONS = 32;  // Don't unroll loops with more iterations
-	static constexpr size_t MIN_CONDITION_COMPLEXITY = 3;  // Minimum ops in condition to be "heavy"
-	static constexpr size_t CODE_SIZE_THRESHOLD = 100;  // Max body size to consider unrolling
+	static constexpr size_t MAX_ITERATIONS_TO_UNROLL = 8;  // Only fully unroll loops with at most this many iterations
+	static constexpr size_t CODE_SIZE_THRESHOLD = 100;     // Max body size to consider unrolling
+	
+	// Gas cost constants (approximations for EVM)
+	static constexpr size_t GAS_JUMPI = 10;           // Conditional jump for loop condition
+	static constexpr size_t GAS_JUMP = 8;             // Unconditional jump back to loop start
+	static constexpr size_t GAS_LT = 3;               // Less-than comparison
+	static constexpr size_t GAS_GT = 3;               // Greater-than comparison
+	static constexpr size_t GAS_ADD = 3;              // Addition
+	static constexpr size_t GAS_SUB = 3;              // Subtraction
+	static constexpr size_t GAS_MUL = 5;              // Multiplication
+	static constexpr size_t GAS_MLOAD = 3;            // Memory load (warm)
+	static constexpr size_t GAS_MSTORE = 3;           // Memory store (warm)
+	static constexpr size_t GAS_PER_BYTE = 200;       // Gas per byte of bytecode (deployment cost / avg runs)
 };
 
 }
