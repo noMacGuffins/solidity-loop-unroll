@@ -21,10 +21,13 @@
 #include <libyul/optimiser/LoopUnrollingAnalysis.h>
 #include <libyul/optimiser/SSAValueTracker.h>
 #include <libyul/optimiser/ASTCopier.h>
+#include <libyul/optimiser/Substitution.h>
+#include <libyul/Dialect.h>
 #include <libyul/AST.h>
 #include <libsolutil/CommonData.h>
 
 #include <utility>
+#include <map>
 
 using namespace solidity;
 using namespace solidity::yul;
@@ -91,25 +94,111 @@ std::optional<std::vector<Statement>> LoopUnrolling::rewriteLoop(
 	size_t _loopIndex
 )
 {
-	std::cout << "=== rewriteLoop called ===" << std::endl;
 	size_t unrollFactor = 0;
 	
 	// Check if we should unroll this loop
 	if (!shouldUnroll(_for, _blockStatements, _loopIndex, unrollFactor))
-	{
-		std::cout << "shouldUnroll returned false" << std::endl;
 		return {};
+	
+	// Extract induction variable information
+	auto inductionInfo = m_analyzer.extractInductionVariable(_for, _blockStatements, _loopIndex);
+	if (!inductionInfo.has_value())
+		return {};  // Should not happen if shouldUnroll returned true
+	
+	auto [inductionVar, varIsFirstArg, initValue] = *inductionInfo;
+	
+	// Determine the step value (how much the induction variable changes per iteration)
+	// For simplicity, we only handle the common case: add(i, 1) or sub(i, 1)
+	u256 stepValue = 1;
+	bool isIncrement = true;
+	
+	// Check if it's updated in POST or BODY
+	for (auto const& stmt : _for.post.statements)
+	{
+		if (auto const* assignment = std::get_if<Assignment>(&stmt))
+		{
+			if (assignment->variableNames.size() == 1 && 
+			    assignment->variableNames[0].name == inductionVar)
+			{
+				if (auto const* call = std::get_if<FunctionCall>(assignment->value.get()))
+				{
+					std::string op;
+					if (auto const* builtin = std::get_if<BuiltinName>(&call->functionName))
+						op = m_dialect.builtin(builtin->handle).name;
+					
+					if (op == "add" || op == "sub")
+					{
+						isIncrement = (op == "add");
+						// Try to extract the step literal
+						if (call->arguments.size() == 2)
+						{
+							if (auto const* lit = std::get_if<Literal>(&call->arguments[1]))
+								stepValue = lit->value.value();
+							else if (auto const* lit = std::get_if<Literal>(&call->arguments[0]))
+								stepValue = lit->value.value();
+						}
+					}
+				}
+			}
+		}
 	}
 	
-	std::cout << "shouldUnroll returned true with factor: " << unrollFactor << std::endl;
+	// Generate the unrolled statements
+	std::vector<Statement> unrolledStatements;
 	
-	// TODO: Implement the actual unrolling transformation
-	// This is where you would:
-	// 1. Clone the loop body unrollFactor times
-	// 2. Substitute induction variable values
-	// 3. Update loop bounds or remove the loop entirely (if fully unrolled)
-	// 4. Return the transformed statements
+	// Store literals so they persist for the substitution references
+	std::vector<Expression> literals;
 	
-	// For now, return empty (no transformation)
-	return {};
+	// First, add the PRE block statements (initialization)
+	// These set up variables like "let i := 0" but may also contain other initialization
+	ASTCopier copier;
+	for (auto const& stmt : _for.pre.statements)
+	{
+		unrolledStatements.emplace_back(copier.translate(stmt));
+	}
+	
+	// Current value of the induction variable
+	u256 currentValue = initValue;
+	
+	for (size_t iteration = 0; iteration < unrollFactor; ++iteration)
+	{
+		// Create a literal expression for the current induction variable value and store it
+		literals.emplace_back(Literal{
+			_for.debugData,
+			LiteralKind::Number,
+			LiteralValue{currentValue}
+		});
+		Expression const* valueLiteral = &literals.back();
+		
+		// Create substitution map: replace induction variable with its current value
+		std::map<YulName, Expression const*> substitutions;
+		substitutions[inductionVar] = valueLiteral;
+		
+		// Copy the loop body statements with substitutions
+		Substitution substituter(substitutions);
+		
+		// Add all statements from the body to our result
+		for (auto const& stmt : _for.body.statements)
+		{
+			unrolledStatements.emplace_back(static_cast<ASTCopier&>(substituter).translate(stmt));
+		}
+		
+		// Add POST block statements for all iterations (including the last one)
+		// This preserves any side effects beyond just updating the induction variable
+		// (e.g., if POST contains memory operations or updates to other variables)
+		// The induction variable update itself (like i := add(i, 1)) becomes a dead
+		// assignment after substitution and will be cleaned up by later optimizer passes
+		for (auto const& stmt : _for.post.statements)
+		{
+			unrolledStatements.emplace_back(static_cast<ASTCopier&>(substituter).translate(stmt));
+		}
+		
+		// Update the induction variable value for next iteration
+		if (isIncrement)
+			currentValue += stepValue;
+		else
+			currentValue -= stepValue;
+	}
+	
+	return unrolledStatements;
 }

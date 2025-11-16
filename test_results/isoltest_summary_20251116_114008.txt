@@ -1,0 +1,18 @@
+
+AST Properties Test Summary: 9/9 tests successful.
+functionDependencyGraphTests/callgraph_no_leaves.sol: OK
+functionDependencyGraphTests/callgraph.sol: OK
+Function Dependency Graph Test Summary: 2/2 tests successful.
+optimizedIRCaching/bytecode_dependency_runtime.sol: OK
+optimizedIRCaching/multiple_contracts.sol: OK
+optimizedIRCaching/bytecode_dependency_shared_by_multiple_contracts.sol: OK
+optimizedIRCaching/bytecode_dependency_creation.sol: OK
+optimizedIRCaching/bytecode_dependency_creation_and_runtime_shared.sol: OK
+optimizedIRCaching/bytecode_dependency_creation_and_runtime.sol: OK
+optimizedIRCaching/single_contract.sol: OK
+optimizedIRCaching/no_contracts.sol: OK
+Optimized IR Caching Test Summary: 8/8 tests successful.
+Summary: 7767/8080 tests successful (313 tests skipped).
+
+Test run completed at #오후
+
