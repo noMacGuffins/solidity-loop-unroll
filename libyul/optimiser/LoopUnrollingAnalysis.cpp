@@ -21,12 +21,19 @@
 #include <libyul/optimiser/Metrics.h>
 #include <libyul/optimiser/DataFlowAnalyzer.h>
 #include <libyul/AST.h>
+#include <libsolutil/CommonData.h>
+
+#include <iostream>
+#include <limits>
 
 using namespace solidity;
 using namespace solidity::yul;
+using namespace solidity::util;
 
 UnrollDecision LoopUnrollingAnalysis::analyzeLoop(
 	ForLoop const& _loop,
+	std::vector<Statement> const& _blockStatements,
+	size_t _loopIndex,
 	std::set<YulName> const& _ssaVariables
 )
 {
@@ -35,15 +42,18 @@ UnrollDecision LoopUnrollingAnalysis::analyzeLoop(
 	// TODO: Use _ssaVariables for SSA-based analysis once implemented
 	(void)_ssaVariables;  // Suppress unused warning
 	
-	// Step 1: Check if the loop is affine
-	if (!isAffineLoop(_loop))
+	// Step 1: Extract induction variable and its initial value
+	auto inductionInfo = extractInductionVariable(_loop, _blockStatements, _loopIndex);
+	if (!inductionInfo.has_value())
 	{
-		decision.reason = "Loop is not affine";
+		decision.reason = "No induction variable or initial value found";
 		return decision;
 	}
 	
+	auto [inductionVar, varIsFirstArg, initValue] = *inductionInfo;
+	
 	// Step 2: Try to predict iteration count
-	std::optional<size_t> iterCount = predictIterationCount(_loop);
+	std::optional<size_t> iterCount = predictIterationCount(_loop, inductionVar, varIsFirstArg, initValue);
 	if (!iterCount.has_value())
 	{
 		decision.reason = "Iteration count not predictable";
@@ -93,31 +103,370 @@ UnrollDecision LoopUnrollingAnalysis::analyzeLoop(
 	return decision;
 }
 
-bool LoopUnrollingAnalysis::isAffineLoop(ForLoop const& _loop)
+std::optional<std::tuple<YulName, bool, u256>> LoopUnrollingAnalysis::extractInductionVariable(
+	ForLoop const& _loop,
+	std::vector<Statement> const& _blockStatements,
+	size_t _loopIndex
+)
 {
-	// TODO: Implement affine loop detection
-	// An affine loop has:
-	// 1. Initialization: let i := constant
-	// 2. Condition: lt(i, bound) or similar
-	// 3. Post: i := add(i, constant) or similar
+	// Step 1: Find the induction variable from the loop condition
+	// Must have a condition
+	if (!_loop.condition)
+		return std::nullopt;
 	
-	(void)_loop;  // Suppress unused warning
-	// For now, return false (conservative)
-	return false;
+	// Condition must be a function call (comparison)
+	auto const* condCall = std::get_if<FunctionCall>(_loop.condition.get());
+	if (!condCall || condCall->arguments.size() != 2)
+		return std::nullopt;
+	
+	// Extract function name
+	std::string condOp;
+	if (auto const* builtinName = std::get_if<BuiltinName>(&condCall->functionName))
+		condOp = m_dialect.builtin(builtinName->handle).name;
+	else if (auto const* identName = std::get_if<Identifier>(&condCall->functionName))
+		condOp = identName->name.str();
+	else
+		return std::nullopt;
+	
+	// Must be a comparison operator
+	if (condOp != "lt" && condOp != "gt" && condOp != "eq" && condOp != "iszero")
+		return std::nullopt;
+	
+	// Find which argument is the induction variable (identifier)
+	// The other must be a literal (the bound)
+	YulName inductionVar;
+	bool varIsFirstArg = false;
+	
+	// Check if first arg is variable, second is literal
+	if (auto const* ident = std::get_if<Identifier>(&condCall->arguments[0]))
+	{
+		if (std::holds_alternative<Literal>(condCall->arguments[1]))
+		{
+			inductionVar = ident->name;
+			varIsFirstArg = true;
+		}
+	}
+	// Or first arg is literal, second is variable
+	else if (std::holds_alternative<Literal>(condCall->arguments[0]))
+	{
+		if (auto const* ident = std::get_if<Identifier>(&condCall->arguments[1]))
+		{
+			inductionVar = ident->name;
+			varIsFirstArg = false;
+		}
+	}
+	
+	if (inductionVar.empty())
+		return std::nullopt;
+	
+	// Step 2: Search for the initial value of the induction variable
+	// Look backwards through statements before the loop
+	std::optional<u256> initValue;
+	
+	for (size_t i = _loopIndex; i > 0; --i)
+	{
+		size_t idx = i - 1;
+		
+		// Check for variable declaration: let i := <literal>
+		if (auto const* varDecl = std::get_if<VariableDeclaration>(&_blockStatements[idx]))
+		{
+			for (size_t j = 0; j < varDecl->variables.size(); ++j)
+			{
+				if (varDecl->variables[j].name == inductionVar && varDecl->value)
+				{
+					if (auto const* lit = std::get_if<Literal>(varDecl->value.get()))
+					{
+						initValue = lit->value.value();
+						break;
+					}
+				}
+			}
+			if (initValue.has_value())
+				break;
+		}
+		
+		// Check for assignment: i := <literal>
+		if (auto const* assignment = std::get_if<Assignment>(&_blockStatements[idx]))
+		{
+			for (size_t j = 0; j < assignment->variableNames.size(); ++j)
+			{
+				if (assignment->variableNames[j].name == inductionVar)
+				{
+					if (auto const* lit = std::get_if<Literal>(assignment->value.get()))
+					{
+						initValue = lit->value.value();
+						break;
+					}
+				}
+			}
+			if (initValue.has_value())
+				break;
+		}
+	}
+	
+	// If no initial value found, cannot proceed
+	if (!initValue.has_value())
+		return std::nullopt;
+	
+	return std::make_tuple(inductionVar, varIsFirstArg, *initValue);
 }
 
-std::optional<size_t> LoopUnrollingAnalysis::predictIterationCount(ForLoop const& _loop)
+std::optional<size_t> LoopUnrollingAnalysis::predictIterationCount(
+	ForLoop const& _loop,
+	YulName const& _inductionVar,
+	bool _varIsFirstArg,
+	u256 _initValue
+)
 {
-	// TODO: Implement iteration count prediction
-	// This requires:
-	// 1. Extracting loop bounds from condition
-	// 2. Extracting initial value from pre block
-	// 3. Extracting step size from post block
-	// 4. Computing (bound - initial) / step
+	// Step 1: Extract bound and comparison operator from condition
+	auto const* condCall = std::get_if<FunctionCall>(_loop.condition.get());
+	if (!condCall)
+		return std::nullopt;
 	
-	(void)_loop;  // Suppress unused warning
-	// For now, return nullopt (cannot predict)
-	return std::nullopt;
+	std::string condOp;
+	if (auto const* builtinName = std::get_if<BuiltinName>(&condCall->functionName))
+		condOp = m_dialect.builtin(builtinName->handle).name;
+	else if (auto const* identName = std::get_if<Identifier>(&condCall->functionName))
+		condOp = identName->name.str();
+	else
+		return std::nullopt;
+	
+	// Extract bound literal (opposite side from induction variable)
+	Literal const* boundLiteral = nullptr;
+	if (_varIsFirstArg)
+		boundLiteral = std::get_if<Literal>(&condCall->arguments[1]);
+	else
+		boundLiteral = std::get_if<Literal>(&condCall->arguments[0]);
+	
+	if (!boundLiteral)
+		return std::nullopt;
+	
+	// Step 2: Find all updates to the induction variable (in both POST and BODY)
+	// This handles for-loops, while-loops, and loops with multiple updates
+	struct Update {
+		std::string operation;  // "add", "sub", "mul"
+		u256 value;
+	};
+	std::vector<Update> updates;
+	
+	// Helper lambda to extract an update from an assignment
+	auto extractUpdate = [&](Assignment const* assignment) -> std::optional<Update> {
+		if (!assignment || assignment->variableNames.size() != 1)
+			return std::nullopt;
+		
+		if (assignment->variableNames[0].name != _inductionVar)
+			return std::nullopt;
+		
+		auto const* updateCall = std::get_if<FunctionCall>(assignment->value.get());
+		if (!updateCall || updateCall->arguments.size() != 2)
+			return std::nullopt;
+		
+		// Extract operation name
+		std::string updateOp;
+		if (auto const* builtinName = std::get_if<BuiltinName>(&updateCall->functionName))
+			updateOp = m_dialect.builtin(builtinName->handle).name;
+		else if (auto const* identName = std::get_if<Identifier>(&updateCall->functionName))
+			updateOp = identName->name.str();
+		else
+			return std::nullopt;
+		
+		// Only support add, sub, mul
+		if (updateOp != "add" && updateOp != "sub" && updateOp != "mul")
+			return std::nullopt;
+		
+		// Find the literal argument (the other must be the induction variable)
+		Literal const* stepLiteral = nullptr;
+		if (auto const* ident = std::get_if<Identifier>(&updateCall->arguments[0]))
+		{
+			if (ident->name == _inductionVar)
+				stepLiteral = std::get_if<Literal>(&updateCall->arguments[1]);
+		}
+		else if (auto const* lit = std::get_if<Literal>(&updateCall->arguments[0]))
+		{
+			if (auto const* ident = std::get_if<Identifier>(&updateCall->arguments[1]))
+			{
+				if (ident->name == _inductionVar)
+					stepLiteral = lit;
+			}
+		}
+		
+		if (!stepLiteral)
+			return std::nullopt;
+		
+		return Update{updateOp, stepLiteral->value.value()};
+	};
+	
+	// Check POST block
+	for (auto const& stmt : _loop.post.statements)
+	{
+		if (auto const* assignment = std::get_if<Assignment>(&stmt))
+		{
+			if (auto update = extractUpdate(assignment))
+				updates.push_back(*update);
+		}
+	}
+	
+	// Check BODY
+	for (auto const& stmt : _loop.body.statements)
+	{
+		if (auto const* assignment = std::get_if<Assignment>(&stmt))
+		{
+			if (auto update = extractUpdate(assignment))
+				updates.push_back(*update);
+		}
+	}
+	
+	// Must have at least one update
+	if (updates.empty())
+		return std::nullopt;
+	
+	// Step 3: Calculate the net effect per iteration
+	// For simplicity, we only handle:
+	// - All updates are "add" (net positive increment)
+	// - All updates are "sub" (net negative decrement)  
+	// - Single "mul" update (geometric progression)
+	
+	bool allAdd = true;
+	bool allSub = true;
+	bool singleMul = (updates.size() == 1 && updates[0].operation == "mul");
+	
+	for (auto const& update : updates)
+	{
+		if (update.operation != "add") allAdd = false;
+		if (update.operation != "sub") allSub = false;
+	}
+	
+	std::string effectiveOp;
+	u256 effectiveStep;
+	
+	if (allAdd)
+	{
+		// Sum all the additions
+		effectiveOp = "add";
+		effectiveStep = 0;
+		for (auto const& update : updates)
+			effectiveStep += update.value;
+	}
+	else if (allSub)
+	{
+		// Sum all the subtractions
+		effectiveOp = "sub";
+		effectiveStep = 0;
+		for (auto const& update : updates)
+			effectiveStep += update.value;
+	}
+	else if (singleMul)
+	{
+		effectiveOp = "mul";
+		effectiveStep = updates[0].value;
+	}
+	else
+	{
+		// Mixed operations or unsupported pattern
+		return std::nullopt;
+	}
+	
+	// Step 4: Use the provided initial value
+	u256 init = _initValue;
+	
+	// Step 5: Calculate iteration count
+	// Parse the numeric values
+	try
+	{
+		u256 bound = boundLiteral->value.value();
+		u256 step = effectiveStep;
+		
+		if (step == 0)
+			return std::nullopt;  // Infinite loop or no progress
+		
+		u256 iterCount;
+		
+		// Calculate based on operation and comparison
+		if (effectiveOp == "add")
+		{
+			// Incrementing loop
+			if (condOp == "lt" && _varIsFirstArg)  // i < bound
+			{
+				if (init >= bound)
+					return 0;  // Never executes
+				iterCount = (bound - init + step - 1) / step;  // Ceiling division
+			}
+			else if (condOp == "gt" && !_varIsFirstArg)  // bound > i (same as i < bound)
+			{
+				if (init >= bound)
+					return 0;
+				iterCount = (bound - init + step - 1) / step;
+			}
+			else
+				return std::nullopt;  // Other patterns not yet supported
+		}
+		else if (effectiveOp == "sub")
+		{
+			// Decrementing loop
+			if (condOp == "gt" && _varIsFirstArg)  // i > bound
+			{
+				if (init <= bound)
+					return 0;  // Never executes
+				iterCount = (init - bound + step - 1) / step;  // Ceiling division
+			}
+			else if (condOp == "lt" && !_varIsFirstArg)  // bound < i (same as i > bound)
+			{
+				if (init <= bound)
+					return 0;
+				iterCount = (init - bound + step - 1) / step;
+			}
+			else
+				return std::nullopt;  // Other patterns not yet supported
+		}
+		else if (effectiveOp == "mul")
+		{
+			// Geometric progression - calculate logarithmically
+			if (step <= 1)
+				return std::nullopt;  // Infinite or no progress
+			
+			u256 current = init;
+			size_t count = 0;
+			constexpr size_t MAX_ITER = 1000;  // Safety limit
+			
+			if (condOp == "lt" && _varIsFirstArg)  // i < bound
+			{
+				while (current < bound && count < MAX_ITER)
+				{
+					current *= step;
+					count++;
+				}
+			}
+			else if (condOp == "gt" && _varIsFirstArg)  // i > bound
+			{
+				while (current > bound && count < MAX_ITER)
+				{
+					current *= step;
+					count++;
+				}
+			}
+			else
+				return std::nullopt;
+			
+			if (count >= MAX_ITER)
+				return std::nullopt;  // Too many iterations
+			
+			iterCount = u256(count);
+		}
+		else
+		{
+			return std::nullopt;  // Unsupported operation
+		}
+		
+		// Convert to size_t, checking for overflow
+		if (iterCount > u256(std::numeric_limits<size_t>::max()))
+			return std::nullopt;
+		
+		return static_cast<size_t>(iterCount);
+	}
+	catch (...)
+	{
+		return std::nullopt;  // Parsing or arithmetic error
+	}
 }
 
 bool LoopUnrollingAnalysis::isConditionHeavy(ForLoop const& _loop)
@@ -194,16 +543,24 @@ size_t LoopUnrollingAnalysis::estimateUnrollBenefit(
 
 size_t LoopUnrollingAnalysis::determineUnrollFactor(ForLoop const& _loop, size_t _iterCount)
 {
-	// TODO: Implement intelligent unroll factor selection
-	// Strategy:
+	// Simple strategy:
 	// 1. If iterations <= 4, fully unroll
-	// 2. Otherwise, find the largest factor that:
-	//    - Divides iteration count evenly (or handle remainder)
-	//    - Doesn't exceed MAX_UNROLL_FACTOR
-	//    - Keeps code size reasonable
+	// 2. If iterations <= MAX_TOTAL_ITERATIONS/2, partially unroll by factor of 2-4
+	// 3. Otherwise, don't unroll (return 0)
 	
-	(void)_loop;       // Suppress unused warning
-	(void)_iterCount;  // Suppress unused warning
-	// For now, return 0 (don't unroll)
-	return 0;
+	(void)_loop;  // For now, don't consider loop body size
+	
+	if (_iterCount == 0)
+		return 0;  // No iterations, no unrolling
+	
+	if (_iterCount <= 4)
+		return _iterCount;  // Fully unroll small loops
+	
+	if (_iterCount <= 16)
+		return 4;  // Unroll by 4x for medium loops
+	
+	if (_iterCount <= MAX_TOTAL_ITERATIONS)
+		return 2;  // Unroll by 2x for larger loops
+	
+	return 0;  // Too many iterations, don't unroll
 }

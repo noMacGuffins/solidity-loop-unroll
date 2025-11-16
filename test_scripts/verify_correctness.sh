@@ -10,7 +10,8 @@ echo "This guide shows you how to run semantic tests and fuzzers"
 echo "to verify the correctness of the Solidity compiler."
 echo ""
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get the repository root (parent of test_scripts)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && cd .. && pwd)"
 export ETH_EVMONE="${ETH_EVMONE:-$SCRIPT_DIR/deps/lib/libevmone.dylib}"
 
 echo "═══════════════════════════════════════════════════════════"

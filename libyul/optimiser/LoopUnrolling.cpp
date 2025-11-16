@@ -45,21 +45,38 @@ void LoopUnrolling::operator()(Block& _block)
 {
 	util::iterateReplacing(
 		_block.statements,
-		[&](Statement& _s) -> std::optional<std::vector<Statement>>
+		[&, this](Statement& _s) -> std::optional<std::vector<Statement>>
 		{
 			visit(_s);
 			if (std::holds_alternative<ForLoop>(_s))
-				return rewriteLoop(std::get<ForLoop>(_s));
+			{
+				// Find the index of this loop in the block
+				size_t loopIndex = 0;
+				for (size_t i = 0; i < _block.statements.size(); ++i)
+				{
+					if (&_block.statements[i] == &_s)
+					{
+						loopIndex = i;
+						break;
+					}
+				}
+				return rewriteLoop(std::get<ForLoop>(_s), _block.statements, loopIndex);
+			}
 			else
 				return {};
 		}
 	);
 }
 
-bool LoopUnrolling::shouldUnroll(ForLoop const& _loop, size_t& _outUnrollFactor)
+bool LoopUnrolling::shouldUnroll(
+	ForLoop const& _loop,
+	std::vector<Statement> const& _blockStatements,
+	size_t _loopIndex,
+	size_t& _outUnrollFactor
+)
 {
 	// Use the analyzer to make the decision
-	UnrollDecision decision = m_analyzer.analyzeLoop(_loop, m_ssaVariables);
+	UnrollDecision decision = m_analyzer.analyzeLoop(_loop, _blockStatements, _loopIndex, m_ssaVariables);
 	
 	// Note: m_dialect will be used in rewriteLoop() for AST construction
 	(void)m_dialect;  // Suppress unused warning for now
@@ -68,13 +85,23 @@ bool LoopUnrolling::shouldUnroll(ForLoop const& _loop, size_t& _outUnrollFactor)
 	return decision.shouldUnroll;
 }
 
-std::optional<std::vector<Statement>> LoopUnrolling::rewriteLoop(ForLoop& _for)
+std::optional<std::vector<Statement>> LoopUnrolling::rewriteLoop(
+	ForLoop& _for,
+	std::vector<Statement> const& _blockStatements,
+	size_t _loopIndex
+)
 {
+	std::cout << "=== rewriteLoop called ===" << std::endl;
 	size_t unrollFactor = 0;
 	
 	// Check if we should unroll this loop
-	if (!shouldUnroll(_for, unrollFactor))
+	if (!shouldUnroll(_for, _blockStatements, _loopIndex, unrollFactor))
+	{
+		std::cout << "shouldUnroll returned false" << std::endl;
 		return {};
+	}
+	
+	std::cout << "shouldUnroll returned true with factor: " << unrollFactor << std::endl;
 	
 	// TODO: Implement the actual unrolling transformation
 	// This is where you would:

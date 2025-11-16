@@ -59,25 +59,46 @@ public:
 
 	/// Analyzes a loop and returns a decision on whether to unroll it.
 	/// @param _loop The loop to analyze
+	/// @param _blockStatements The statements in the block containing this loop (for finding init values)
+	/// @param _loopIndex The index of the loop in _blockStatements
 	/// @param _ssaVariables Set of SSA variables in the current scope
 	/// @returns UnrollDecision with shouldUnroll flag and unroll factor
 	UnrollDecision analyzeLoop(
 		ForLoop const& _loop,
+		std::vector<Statement> const& _blockStatements,
+		size_t _loopIndex,
 		std::set<YulName> const& _ssaVariables
 	);
 
 private:
 	// ========== Possibility Checks ==========
 	
-	/// Checks if the loop is affine (induction variable changes by constant).
-	/// An affine loop has the form: for { let i := start } lt(i, bound) { i := add(i, step) }
-	/// @returns true if the loop is affine, false otherwise
-	bool isAffineLoop(ForLoop const& _loop);
+	/// Extracts the induction variable and its initial value from the loop and preceding statements.
+	/// Returns the variable name, whether it's first arg in condition, and the initial value.
+	/// @param _loop The loop to analyze
+	/// @param _blockStatements The statements in the block containing this loop
+	/// @param _loopIndex The index of the loop in _blockStatements
+	/// @returns tuple of (induction variable, is first arg, initial value) or nullopt if not found
+	std::optional<std::tuple<YulName, bool, u256>> extractInductionVariable(
+		ForLoop const& _loop,
+		std::vector<Statement> const& _blockStatements,
+		size_t _loopIndex
+	);
 	
 	/// Attempts to predict the iteration count of the loop.
-	/// This only works for loops with constant bounds and steps.
+	/// Works for both for-loops (induction variable updated in post) and
+	/// while-loops (induction variable updated in body).
+	/// @param _loop The loop to analyze
+	/// @param _inductionVar The induction variable name
+	/// @param _varIsFirstArg Whether the variable is the first argument in condition
+	/// @param _initValue The initial value of the induction variable
 	/// @returns iteration count if predictable, nullopt otherwise
-	std::optional<size_t> predictIterationCount(ForLoop const& _loop);
+	std::optional<size_t> predictIterationCount(
+		ForLoop const& _loop,
+		YulName const& _inductionVar,
+		bool _varIsFirstArg,
+		u256 _initValue
+	);
 	
 	// ========== Effectiveness Checks ==========
 	
