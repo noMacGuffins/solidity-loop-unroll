@@ -71,7 +71,7 @@ UnrollDecision LoopUnrollingAnalysis::analyzeLoop(
 	
 	// Only unroll if the unrolled loop won't contribute more than 50% of max contract size
 	// This leaves room for the rest of the contract code
-	if (estimatedBytecode > MAX_CONTRACT_SIZE / 2)
+	if (estimatedBytecode > MAX_CONTRACT_SIZE  - 5000) // 5000 bytes buffer for other code
 	{
 		decision.reason = "Unrolled loop would be too large: " + std::to_string(estimatedBytecode) + " bytes (limit: " + std::to_string(MAX_CONTRACT_SIZE / 2) + ")";
 		return decision;

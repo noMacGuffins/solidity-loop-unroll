@@ -82,6 +82,9 @@ public:
 
 	void runSequence(std::vector<std::string> const& _steps, Block& _ast);
 	void runSequence(std::string_view _stepAbbreviations, Block& _ast, bool _repeatUntilStable = false);
+	
+	/// Run sequence and return true if it made changes to the AST
+	bool runSequenceAndCheckChanges(std::vector<std::string> const& _steps, Block& _ast);
 
 	static std::map<std::string, std::unique_ptr<OptimiserStep>> const& allSteps();
 	static std::map<std::string, char> const& stepNameToAbbreviationMap();

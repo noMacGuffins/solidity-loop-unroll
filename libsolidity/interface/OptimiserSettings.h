@@ -61,10 +61,7 @@ struct OptimiserSettings
 
 		"jmul[jul] VcTOcul jmul"      // Make source short and pretty
 
-		"R"						// loop unroll and Remove dead code
-
-		"xa[r]cL"                      // Turn into SSA again and simplify
-		"CTUca[r]LSsTFOtfDnca[r]Iulc"  // SSA plus simplify
+		"R?(dhfoDgvulfnTUtnIf xa[r]EscLM Vcul [j] Trpeul xa[r]cL gvifM CTUca[r]LSsTFOtfDnca[r]Iulc scCTUt gvifM x[scCTUt] TOntnfDIul gvifM jmul[jul] VcTOcul jmul)"
 		;
 
 	static char constexpr DefaultYulOptimiserCleanupSteps[] = "fDnTOcmuO";

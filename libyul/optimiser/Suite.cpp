@@ -336,12 +336,17 @@ void OptimiserSuite::validateSequence(std::string_view _stepAbbreviations)
 		case '\n':
 			break;
 		case '[':
+		case '(':
 			assertThrow(nestingLevel < std::numeric_limits<int8_t>::max(), OptimizerException, "Brackets nested too deep");
 			nestingLevel++;
 			break;
 		case ']':
+		case ')':
 			nestingLevel--;
 			assertThrow(nestingLevel >= 0, OptimizerException, "Unbalanced brackets");
+			break;
+		case '?':
+			// Conditional execution marker - valid syntax element
 			break;
 		case ':':
 			++colonDelimiters;
@@ -386,28 +391,30 @@ void OptimiserSuite::runSequence(std::string_view _stepAbbreviations, Block& _as
 	{
 		for (size_t i = 0; i < _tail.size(); ++i)
 		{
-			yulAssert(_tail[i] != ']');
-			if (_tail[i] == '[')
+			yulAssert(_tail[i] != ']' && _tail[i] != ')');
+			if (_tail[i] == '[' || _tail[i] == '(' || _tail[i] == '?')
 				return {_tail.substr(0, i), _tail.substr(i)};
 		}
 		return {_tail, {}};
 	};
 
-	// This splits '[bbb]ccc...' into 'bbb' and 'ccc...'.
+	// This splits '[bbb]ccc...' or '(bbb)ccc...' into 'bbb' and 'ccc...'.
 	auto extractBracketContent = [](std::string_view _tail) -> std::tuple<std::string_view, std::string_view>
 	{
-		yulAssert(!_tail.empty() && _tail[0] == '[');
+		yulAssert(!_tail.empty() && (_tail[0] == '[' || _tail[0] == '('));
+		char openBracket = _tail[0];
+		char closeBracket = (openBracket == '[') ? ']' : ')';
 
 		size_t contentLength = 0;
 		int8_t nestingLevel = 1;
 		for (char abbreviation: _tail.substr(1))
 		{
-			if (abbreviation == '[')
+			if (abbreviation == openBracket)
 			{
 				yulAssert(nestingLevel < std::numeric_limits<int8_t>::max());
 				++nestingLevel;
 			}
-			else if (abbreviation == ']')
+			else if (abbreviation == closeBracket)
 			{
 				--nestingLevel;
 				if (nestingLevel == 0)
@@ -416,7 +423,7 @@ void OptimiserSuite::runSequence(std::string_view _stepAbbreviations, Block& _as
 			++contentLength;
 		}
 		yulAssert(nestingLevel == 0);
-		yulAssert(_tail[contentLength + 1] == ']');
+		yulAssert(_tail[contentLength + 1] == closeBracket);
 
 		return {_tail.substr(1, contentLength), _tail.substr(contentLength + 2)};
 	};
@@ -430,21 +437,48 @@ void OptimiserSuite::runSequence(std::string_view _stepAbbreviations, Block& _as
 		return steps;
 	};
 
-	std::vector<std::tuple<std::string_view, bool>> subsequences;
+	struct Subsequence
+	{
+		std::string_view sequence;
+		bool repeat;
+		bool conditional; // Only run if previous subsequence made changes
+		bool isNested;    // True if extracted from brackets/parens, false if plain sequence
+	};
+
+	std::vector<Subsequence> subsequences;
 	std::string_view tail = _stepAbbreviations;
 	while (!tail.empty())
 	{
 		std::string_view subsequence;
 		tie(subsequence, tail) = extractNonNestedPrefix(tail);
 		if (subsequence.size() > 0)
-			subsequences.push_back({subsequence, false});
+			subsequences.push_back({subsequence, false, false, false});  // Plain sequence, not nested
 
 		if (tail.empty())
 			break;
 
-		tie(subsequence, tail) = extractBracketContent(tail);
-		if (subsequence.size() > 0)
-			subsequences.push_back({subsequence, true});
+		// Check for conditional marker '?'
+		bool conditional = false;
+		if (tail[0] == '?')
+		{
+			conditional = true;
+			tail = tail.substr(1);
+			// After '?', we expect a bracket or parenthesis
+			yulAssert(!tail.empty() && (tail[0] == '[' || tail[0] == '('), "Conditional marker '?' must be followed by bracketed/parenthesized sequence");
+		}
+
+		if (tail[0] == '[')
+		{
+			tie(subsequence, tail) = extractBracketContent(tail);
+			if (subsequence.size() > 0)
+				subsequences.push_back({subsequence, true, conditional, true});  // Bracketed, nested
+		}
+		else if (tail[0] == '(')
+		{
+			tie(subsequence, tail) = extractBracketContent(tail);
+			if (subsequence.size() > 0)
+				subsequences.push_back({subsequence, false, conditional, true});  // Parenthesized, nested
+		}
 	}
 
 	// NOTE: If _repeatUntilStable is false, the value will not be used so do not calculate it.
@@ -452,12 +486,36 @@ void OptimiserSuite::runSequence(std::string_view _stepAbbreviations, Block& _as
 
 	for (size_t round = 0; round < MaxRounds; ++round)
 	{
-		for (auto const& [subsequence, repeat]: subsequences)
+		bool previousMadeChanges = true; // First subsequence always runs
+		
+		for (auto const& subsequence: subsequences)
 		{
-			if (repeat)
-				runSequence(subsequence, _ast, true);
+			// Skip conditional subsequences if previous didn't make changes
+			if (subsequence.conditional && !previousMadeChanges)
+			{
+				previousMadeChanges = false;
+				continue;
+			}
+
+			if (subsequence.repeat)
+			{
+				// For repeating sequences, we need to check if the entire repeat cycle made changes
+				auto copyBefore = std::make_unique<Block>(std::get<Block>(ASTCopier{}(_ast)));
+				runSequence(subsequence.sequence, _ast, true);
+				previousMadeChanges = !SyntacticallyEqual{}.statementEqual(_ast, *copyBefore);
+			}
+			else if (subsequence.isNested)
+			{
+				// Non-repeating nested sequence - run recursively for nested syntax
+				auto copyBefore = std::make_unique<Block>(std::get<Block>(ASTCopier{}(_ast)));
+				runSequence(subsequence.sequence, _ast, false);
+				previousMadeChanges = !SyntacticallyEqual{}.statementEqual(_ast, *copyBefore);
+			}
 			else
-				runSequence(abbreviationsToSteps(subsequence), _ast);
+			{
+				// Plain sequence without nesting - convert abbreviations to steps
+				previousMadeChanges = runSequenceAndCheckChanges(abbreviationsToSteps(subsequence.sequence), _ast);
+			}
 		}
 
 		if (!_repeatUntilStable)
@@ -498,4 +556,11 @@ void OptimiserSuite::runSequence(std::vector<std::string> const& _steps, Block& 
 			}
 		}
 	}
+}
+
+bool OptimiserSuite::runSequenceAndCheckChanges(std::vector<std::string> const& _steps, Block& _ast)
+{
+	auto copyBefore = std::make_unique<Block>(std::get<Block>(ASTCopier{}(_ast)));
+	runSequence(_steps, _ast);
+	return !SyntacticallyEqual{}.statementEqual(_ast, *copyBefore);
 }
