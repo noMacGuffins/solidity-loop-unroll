@@ -1,0 +1,92 @@
+Test Counts:
+════════════════════════════════════════════════════════════
+  Baseline: 7695 passing, 0
+0 failing
+  New:      7755 passing, 0
+0 failing
+
+✅ Newly Passing Tests (67):
+────────────────────────────────────────────────────────────
+  objectCompiler/leading_and_trailing_dots.yul
+  objectCompiler/prune_unreachable_function_non_returning.yul
+  objectCompiler/prune_unreachable_function_recursion.yul
+  semanticTests/array/arrays_complex_from_and_to_storage.sol
+  semanticTests/array/copying/array_copy_calldata_storage.sol
+  semanticTests/array/copying/array_copy_cleanup_uint128.sol
+  semanticTests/array/copying/array_copy_cleanup_uint40.sol
+  semanticTests/array/copying/array_copy_clear_storage_packed.sol
+  semanticTests/array/copying/array_copy_different_packing.sol
+  semanticTests/array/copying/array_copy_memory_to_storage.sol
+  semanticTests/array/copying/array_copy_storage_storage_different_base_nested.sol
+  semanticTests/array/copying/array_copy_storage_storage_static_simple.sol
+  semanticTests/array/copying/array_copy_target_leftover.sol
+  semanticTests/array/copying/array_copy_target_leftover2.sol
+  semanticTests/array/copying/array_elements_to_mapping.sol
+  semanticTests/array/copying/array_of_function_external_storage_to_storage_dynamic_different_mutability.sol
+  semanticTests/array/copying/array_of_function_external_storage_to_storage_dynamic.sol
+  semanticTests/array/copying/array_of_structs_containing_arrays_memory_to_storage.sol
+  semanticTests/array/copying/array_to_mapping.sol
+  semanticTests/array/copying/arrays_from_and_to_storage.sol
+  semanticTests/array/copying/calldata_array_to_mapping.sol
+  semanticTests/array/copying/calldata_to_storage_different_base.sol
+  semanticTests/array/copying/cleanup_during_multi_element_per_slot_copy.sol
+  semanticTests/array/copying/copy_function_internal_storage_array.sol
+  semanticTests/array/copying/copy_internal_function_array_to_storage.sol
+  semanticTests/array/copying/elements_of_nested_array_of_structs_calldata_to_storage.sol
+  semanticTests/array/copying/elements_of_nested_array_of_structs_memory_to_storage.sol
+  semanticTests/array/copying/memory_to_storage_different_base.sol
+  semanticTests/array/copying/nested_array_element_calldata_to_storage.sol
+  semanticTests/array/copying/nested_array_element_memory_to_storage.sol
+  semanticTests/array/copying/nested_array_element_storage_to_memory.sol
+  semanticTests/array/copying/nested_array_element_storage_to_storage.sol
+  semanticTests/array/copying/nested_array_of_structs_calldata_to_storage.sol
+  semanticTests/array/copying/nested_array_of_structs_memory_to_storage.sol
+  semanticTests/array/copying/nested_array_of_structs_with_nested_array_from_storage_to_memory.sol
+  semanticTests/array/copying/nested_dynamic_array_element_calldata_to_storage.sol
+  semanticTests/array/indexAccess/fixed_bytes_index_access.sol
+  semanticTests/array/inline_array_return.sol
+  semanticTests/array/pop/array_pop_array_transition.sol
+  semanticTests/array/push/array_push_nested_from_calldata.sol
+  semanticTests/array/push/array_push_nested_from_memory.sol
+  semanticTests/array/push/array_push_struct_from_calldata.sol
+  semanticTests/array/push/array_push_struct.sol
+  semanticTests/conversions/function_type_array_to_storage.sol
+  semanticTests/expressions/conditional_expression_storage_memory_1.sol
+  semanticTests/immutable/small_types_in_reverse.sol
+  semanticTests/inlineAssembly/for_loop_continue.sol
+  semanticTests/inlineAssembly/keccak_yul_optimization.sol
+  semanticTests/storage/array_accessor.sol
+  semanticTests/storage/chop_sign_bits.sol
+  semanticTests/structs/copy_from_mapping.sol
+  semanticTests/structs/copy_struct_with_nested_array_from_calldata_to_storage.sol
+  semanticTests/structs/copy_struct_with_nested_array_from_storage_to_storage.sol
+  semanticTests/structs/copy_substructures_from_mapping.sol
+  semanticTests/structs/copy_substructures_to_mapping.sol
+  semanticTests/structs/copy_to_mapping.sol
+  semanticTests/structs/memory_structs_nested_load.sol
+  semanticTests/types/mapping/copy_from_mapping_to_mapping.sol
+  semanticTests/userDefinedValueType/calldata_to_storage.sol
+  semanticTests/userDefinedValueType/memory_to_storage.sol
+  syntaxTests/controlFlow/unreachableCode/assembly/for_break.sol
+  syntaxTests/controlFlow/unreachableCode/assembly/for_continue.sol
+  yulOptimizerTests/fullSuite/abi_example1.yul
+  yulOptimizerTests/fullSuite/structural_simplification.yul
+  yulOptimizerTests/loopUnrolling/non_affine_loop.yul
+  yulOptimizerTests/loopUnrolling/simple_constant_loop.yul
+  yulSyntaxTests/for_statement_2.yul
+
+❌ Newly Failing Tests (1):
+────────────────────────────────────────────────────────────
+  
+
+⚠️  Still Failing Tests (1):
+────────────────────────────────────────────────────────────
+  
+
+════════════════════════════════════════════════════════════
+Summary:
+════════════════════════════════════════════════════════════
+✅ Net improvement: +60 passing tests
+  - 67 tests now passing
+  - 1 tests now failing
+

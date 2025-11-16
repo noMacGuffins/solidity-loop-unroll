@@ -59,7 +59,13 @@ struct OptimiserSettings
 		"x[scCTUt] TOntnfDIul"         // Perform structural simplification
 		"gvifM"                        // Run full inliner
 
-		"jmul[jul] VcTOcul jmul";      // Make source short and pretty
+		"jmul[jul] VcTOcul jmul"      // Make source short and pretty
+
+		"R"						// loop unroll and Remove dead code
+
+		"xa[r]cL"                      // Turn into SSA again and simplify
+		"CTUca[r]LSsTFOtfDnca[r]Iulc"  // SSA plus simplify
+		;
 
 	static char constexpr DefaultYulOptimiserCleanupSteps[] = "fDnTOcmuO";
 

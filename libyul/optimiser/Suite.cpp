@@ -153,6 +153,7 @@ void OptimiserSuite::run(
 	// Hard-coded FunctionGrouper step is used to bring the AST into a canonical form required by the StackCompressor
 	// and StackLimitEvader. This is hard-coded as the last step, as some previously executed steps may break the
 	// aforementioned form, thus causing the StackCompressor/StackLimitEvader to throw.
+	
 	suite.runSequence("g", astRoot);
 
 	if (evmDialect)
