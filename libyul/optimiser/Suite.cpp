@@ -123,13 +123,12 @@ void OptimiserSuite::run(
 	OptimiserStepContext context{dialect, dispenser, reservedIdentifiers, _expectedExecutionsPerDeployment};
 
 	OptimiserSuite suite(context, Debug::None);
+	suite.runSequence("R", astRoot);
 
 	// Some steps depend on properties ensured by FunctionHoister, BlockFlattener, FunctionGrouper and
 	// ForLoopInitRewriter. Run them first to be able to run arbitrary sequences safely.
-	// LoopUnrolling runs right after ForLoopInitRewriter to enable subsequent optimizations.
-	// Dead code elimination, unused assignment elimination, expression simplification, and CSE
-	// run after loop unrolling to clean up the unrolled code.
-	suite.runSequence("hgfoRDrsc", astRoot);
+	suite.runSequence("hgfo", astRoot);
+	suite.runSequence("Drsc", astRoot);
 
 	// Now the user-supplied part
 	suite.runSequence(_optimisationSequence, astRoot);
