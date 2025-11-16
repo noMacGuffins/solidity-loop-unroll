@@ -367,6 +367,9 @@ YulOptimizerTestCommon::YulOptimizerTestCommon(std::shared_ptr<Object const> _ob
 			ForLoopInitRewriter::run(*m_context, block);
 			FunctionHoister::run(*m_context, block);
 			LoopUnrolling::run(*m_context, block);
+			// Run CSE and LoadResolver after unrolling to enable optimizations detected in heuristics
+			CommonSubexpressionEliminator::run(*m_context, block);
+			LoadResolver::run(*m_context, block);
 			return block;
 		}},
 		{"controlFlowSimplifier", [&]() {
